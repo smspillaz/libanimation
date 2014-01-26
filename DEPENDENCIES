@@ -1,0 +1,11 @@
+clang
+debhelper
+devscripts
+cdbs
+g++-4.8
+gcc-4.8
+cppcheck
+libboost1.54-dev
+libgtest-dev
+google-mock
+vera++
