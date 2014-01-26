@@ -1,0 +1,34 @@
+language: cpp
+env:
+ # GNU C/C++ Build
+ - CC_OVERLOAD=gcc
+   CXX_OVERLOAD=g++
+ # Clang Build+
+ - CC_OVERLOAD=clang
+   CXX_OVERLOAD=clang++
+ # Clang Static Analysis
+ - SCAN_BUILD=1  
+ # GCov Coverage Build
+ - CC_OVERLOAD=gcc
+   CXX_OVERLOAD=g++
+   CMAKE_OPTIONS="-DCMAKE_BUILD_TYPE=Debug -DENABLE_COVERAGE=ON"
+   COVERAGE=1
+before_install:
+  - git submodule update --init --recursive
+  - sudo apt-add-repository -y ppa:smspillaz/verapp-latest
+  - sudo apt-add-repository -y ppa:boost-latest/ppa
+  - sudo apt-add-repository -y ppa:ubuntu-toolchain-r/test
+  - sudo apt-get update -qq
+  - sudo apt-get install -qq `cat DEPENDENCIES`
+  - yes | sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 50
+  - if [[ $COVERAGE == 1 ]] ; then sudo pip install cpp-coveralls; fi
+script:
+  - mkdir build
+  - cd build
+  - export CC=${CC_OVERLOAD}
+  - export CXX=${CXX_OVERLOAD}
+  - if [[ $SCAN_BUILD == 1 ]] ; then scan-build cmake .. && scan-build --use-cc=clang --use-c++=clang++ make; else cmake .. `echo ${CMAKE_OPTIONS}` && make; fi
+  - ./tests/wobbly_unit_tests
+  - cd ../
+after_success:
+ - if [[ $COVERAGE == 1 ]] ; then coveralls -E "(^.*\/libwobbly\/build\/.*$)" -E "(^.*\/libwobbly/\include\/.*$)"; fi
