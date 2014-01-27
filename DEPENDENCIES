@@ -1,0 +1,6 @@
+clang
+cppcheck
+libboost-dev
+libgtest-dev
+google-mock
+vera++
