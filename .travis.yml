@@ -3,7 +3,7 @@ env:
  # GNU C/C++ Build
  - CC_OVERLOAD=gcc
    CXX_OVERLOAD=g++
- # Clang Build+
+ # Clang Build
  - CC_OVERLOAD=clang
    CXX_OVERLOAD=clang++
  # Clang Static Analysis
