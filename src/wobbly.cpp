@@ -121,6 +121,7 @@ namespace wobbly
             }
 
             void MoveByDelta (Vector const &);
+            Vector DeltaTo (Vector const &);
 
             /* Possibly replace this with a strategy */
             unsigned int         mIsAnchorCount;
@@ -194,6 +195,44 @@ namespace
         bg::multiply_value (additionalVelocity, time);
         bg::add_point (velocity, additionalVelocity);
     }
+
+    inline bool EulerIntegrate (float time, float friction, float mass,
+                                wobbly::PointView <double> &force,
+                                wobbly::PointView <double> &velocity,
+                                wobbly::PointView <double> &position)
+    {
+        assert (mass > 0.0f);
+
+        /* Apply friction, which is exponentially
+         * proportional to both velocity and time */
+        wobbly::Vector frictionForce;
+        bg::assign_point (frictionForce, velocity);
+        bg::multiply_value (frictionForce, friction);
+        bg::subtract_point (force, frictionForce);
+
+        /* First apply velocity change for force
+         * exerted over time */
+        ApplyAccelerativeForce (velocity, force, mass, time);
+
+        /* Clip velocity */
+        PointClip (velocity, 0.05);
+
+        /* Distance travelled will be
+         *
+         *   d[t] = ((v[t - 1] + v[t]) / 2) * t
+         */
+        wobbly::Vector positionDelta;
+        bg::assign_point (positionDelta, velocity);
+        bg::multiply_value (positionDelta, time / 2);
+        bg::add_point (position, positionDelta);
+
+        /* Reset force */
+        bg::assign_point (force, wobbly::Vector (0.0, 0.0));
+
+        /* Return true if we still have velocity remaining */
+        return std::fabs (bg::get <0> (velocity)) > 0.00 ||
+               std::fabs (bg::get <1> (velocity)) > 0.00;
+    }
 }
 
 bool
@@ -207,35 +246,7 @@ wobbly::Object::Step (float time, float friction, float mass)
 
     assert (mass > 0.0f);
 
-    /* Apply friction, which is exponentially
-     * proportional to both velocity and time */
-    Vector frictionForce;
-    bg::assign_point (frictionForce, priv->velocity);
-    bg::multiply_value (frictionForce, friction);
-    bg::subtract_point (priv->force, frictionForce);
-
-    /* First apply velocity change for force
-     * exerted over time */
-    ApplyAccelerativeForce (priv->velocity, priv->force, mass, time);
-
-    /* Clip velocity */
-    PointClip (priv->velocity, 0.05);
-
-    /* Distance travelled will be
-     *
-     *   d[t] = ((v[t - 1] + v[t]) / 2) * t
-     */
-    Vector positionDelta;
-    bg::assign_point (positionDelta, priv->velocity);
-    bg::multiply_value (positionDelta, time / 2);
-    bg::add_point (priv->position, positionDelta);
-
-    /* Reset force */
-    bg::assign_point (priv->force, Vector (0.0, 0.0));
-
-    /* Return true if we still have velocity remaining */
-    return std::fabs (bg::get <0> (priv->velocity)) > 0.00 ||
-           std::fabs (bg::get <1> (priv->velocity)) > 0.00;
+    return EulerIntegrate (time, friction, mass, priv->force, priv->velocity, priv->position);
 }
 
 bool
@@ -264,10 +275,25 @@ wobbly::Object::ModifyPosition (PositionFunc const &modifier)
 }
 
 wobbly::Object::AnchorGrab
+wobbly::Object::Grab (AnchorGrab::GrabNotify const &grab,
+                      AnchorGrab::ReleaseNotify const &release)
+{
+    return AnchorGrab (*this->priv,
+                       this->priv->mIsAnchorCount,
+                       grab,
+                       release);
+}
+
+wobbly::Object::AnchorGrab
 wobbly::Object::Grab ()
 {
-    return wobbly::Object::AnchorGrab (*this->priv,
-                                       this->priv->mIsAnchorCount);
+    auto const nullNotify =
+        [](ImmediatelyMovablePosition &) {
+        };
+
+    return AnchorGrab (*this->priv,
+                       this->priv->mIsAnchorCount,
+                       nullNotify, nullNotify);
 }
 
 wobbly::PointView <double> const &
@@ -282,11 +308,21 @@ wobbly::Object::Private::MoveByDelta (Vector const &delta)
     bg::add_point (position, delta);
 }
 
-wobbly::Object::AnchorGrab::AnchorGrab (ImmediatelyMovablePosition &position,
-                                        unsigned int               &lockCount) :
-    position (position),
-    lockCount (lockCount)
+wobbly::Vector
+wobbly::Object::Private::DeltaTo (Vector const &delta)
 {
+    return wobbly::Vector (0, 0);
+}
+
+wobbly::Object::AnchorGrab::AnchorGrab (ImmediatelyMovablePosition &position,
+                                        unsigned int               &lockCount,
+                                        GrabNotify const           &grab,
+                                        ReleaseNotify const        &release) :
+    position (position),
+    lockCount (lockCount),
+    release (release)
+{
+    grab (position);
     ++lockCount;
 }
 
@@ -352,8 +388,11 @@ wobbly::Spring::~Spring ()
 {
 }
 
+/* On a linear function we'll have a degree of immediate movement,
+ * which ramps up to be at a lower threshold depending on how far
+ * away it is from any anchors */
 bool
-wobbly::Spring::applyForces (float springConstant)
+wobbly::Spring::applyForces (float springConstant, float forceRatio)
 {
     Vector &desiredDistance (priv->desiredDistance);
     Vector desiredNegative (desiredDistance);
@@ -372,14 +411,41 @@ wobbly::Spring::applyForces (float springConstant)
     Vector forceA (deltaA);
     Vector forceB (deltaB);
 
+    /* First multiply by force ratio, the greater the
+     * ratio, the greater the force */
+    springConstant *= forceRatio;
+
     bg::multiply_value (forceA, springConstant);
     bg::multiply_value (forceB, springConstant);
 
+    /* Calculate immediate movement as the inverse of any
+     * delta remaining */
+    Vector immediateMovementA (deltaA);
+    Vector immediateMovementB (deltaB);
+
+    bg::multiply_value (immediateMovementA, 1.0 - forceRatio);
+    bg::multiply_value (immediateMovementB, 1.0 - forceRatio);
+
+    /* Apply forces */
     bool forceRemaining = priv->a.ApplyForce (forceA);
     forceRemaining |= priv->b.ApplyForce (forceB);
 
+    /* Apply movements */
+    priv->a.ModifyPosition ([&immediateMovementA](PointView <double> &p) {
+        bg::add_point (p, immediateMovementA);
+    });
+    priv->b.ModifyPosition ([&immediateMovementB](PointView <double> &p) {
+        bg::add_point (p, immediateMovementB);
+    });
+
     /* Return true if we still have force remaining */
     return forceRemaining;
+}
+
+bool
+wobbly::Spring::applyForces (float springConstant)
+{
+    return applyForces (springConstant, 1.0);
 }
 
 void
@@ -393,6 +459,8 @@ namespace wobbly
     class Model::Private
     {
         public:
+
+            typedef std::reference_wrapper <ImmediatelyMovablePosition> IMPRef;
 
             Private (Point const &initialPosition,
                      float       width,
@@ -411,14 +479,14 @@ namespace wobbly
             BezierMesh           mMesh;
             std::vector <double> mVelocities;
             std::vector <double> mForces;
-
-            float mWidth, mHeight;
+            std::vector <IMPRef> mAnchoredObjects;
 
             Settings &mSettings;
 
             std::vector <Object> mObjects;
             std::vector <Spring> mSprings;
 
+            float mWidth, mHeight;
             bool mCurrentlyUnequal;
     };
 }
@@ -427,9 +495,9 @@ wobbly::Model::Private::Private (Point const &initialPosition,
                                  float       width,
                                  float       height,
                                  Settings    &settings) :
+    mSettings (settings),
     mWidth (width),
     mHeight (height),
-    mSettings (settings),
     mCurrentlyUnequal (false)
 {
     unsigned int const gridWidth = wobbly::BezierMesh::Width;
@@ -570,8 +638,7 @@ wobbly::Model::TransformClosestObjectToPosition (TransformFunc const &func,
 {
     size_t index (ClosestObjectIndexToAbsolutePosition (priv->mObjects, point));
 
-    wobbly::PointView <double> position (priv->mMesh.PointForIndex (index / 4,
-                                                                    index % 4));
+    wobbly::PointView <double> position (priv->mMesh.PointArray (), index);
     wobbly::PointView <double> velocity (priv->mVelocities, index);
     wobbly::PointView <double> force (priv->mForces, index);
 
@@ -583,24 +650,44 @@ wobbly::Model::TransformClosestObjectToPosition (TransformFunc const &func,
 wobbly::Object::AnchorGrab
 wobbly::Model::GrabAnchor (Point const &position)
 {
+    typedef ImmediatelyMovablePosition IMP;
+    typedef std::reference_wrapper <IMP> IMPRef;
+
     wobbly::Object &closest (ClosestObjectToAbsolutePosition (priv->mObjects,
                                                               position));
 
     /* Bets are off once we've grabbed an anchor, the model is now unequal */
     priv->mCurrentlyUnequal = true;
-    return closest.Grab ();
+
+    /* Set up grab notification */
+    auto const grabNotify =
+        [this](ImmediatelyMovablePosition &pos) {
+            priv->mAnchoredObjects.push_back (std::ref (pos));
+        };
+
+    auto const releaseNotify =
+        [this](IMP &pos) {
+            auto &anchored (priv->mAnchoredObjects);
+            anchored.erase (std::remove_if (anchored.begin (),
+                                            anchored.end (),
+                                            [&pos](IMPRef const &imp) -> bool {
+                                                return &(imp.get()) == &pos;
+                                            }),
+                            anchored.end ());
+        };
+
+    return closest.Grab (grabNotify, releaseNotify);
 }
 
 void
 wobbly::Model::MoveModelBy (Point const &delta)
 {
-    for (unsigned int j = 0; j < BezierMesh::Height; ++j)
+    auto &points (priv->mMesh.PointArray ());
+    const size_t nPoints = points.size () / 2;
+    for (size_t i = 0; i < nPoints; ++i)
     {
-        for (unsigned int i = 0; i < BezierMesh::Width; ++i)
-        {
-            auto point (priv->mMesh.PointForIndex (i, j));
-            bg::add_point (point, delta);
-        }
+        PointView <double> pv (points, i);
+        bg::add_point (pv, delta);
     }
 }
 
@@ -800,10 +887,12 @@ wobbly::Model::StepModel (unsigned int time)
      * might need to change in the future */
     while (steps--)
     {
+        /* Calculate forces */
         for (auto &spring : priv->mSprings)
             moreStepsRequired |=
                 spring.applyForces (priv->mSettings.springConstant);
 
+        /* Integrate forces with positions */
         for (auto &object : priv->mObjects)
             moreStepsRequired |= object.Step (1.0f,
                                               priv->mSettings.friction,
@@ -832,12 +921,7 @@ namespace wobbly
     {
         public:
 
-            Private () :
-                mPoints (Width * Height * 2)
-            {
-            }
-
-            std::vector <double> mPoints;
+            std::array <double, TotalIndices> mPoints;
     };
 }
 
@@ -895,7 +979,7 @@ wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
     double x = 0.0;
     double y = 0.0;
 
-    std::vector <double> const &points (priv->mPoints);
+    std::array <double, TotalIndices> const &points (priv->mPoints);
 
     /* This will access the point matrix in a linear fashion for
      * cache-efficiency */
@@ -996,9 +1080,40 @@ wobbly::BezierMesh::Extremes () const
     return extremes;
 }
 
+namespace
+{
+    unsigned int CoordIndex (unsigned int x,
+                             unsigned int y,
+                             unsigned int width)
+    {
+        return y * width + x;
+    }
+}
+
 wobbly::PointView <double>
+wobbly::BezierMesh::PointForIndex (unsigned int x, unsigned int y)
+{
+    return wobbly::PointView <double> (priv->mPoints,
+                                       CoordIndex (x, y,
+                                                   BezierMesh::Width));
+}
+
+wobbly::PointView <double const>
 wobbly::BezierMesh::PointForIndex (unsigned int x, unsigned int y) const
 {
-    unsigned int meshIndex = y * Width + x;
-    return wobbly::PointView <double> (priv->mPoints, meshIndex);
+    return wobbly::PointView <double const> (priv->mPoints,
+                                             CoordIndex (x, y,
+                                                         BezierMesh::Width));
+}
+
+std::array <double, wobbly::BezierMesh::TotalIndices> &
+wobbly::BezierMesh::PointArray ()
+{
+    return priv->mPoints;
+}
+
+std::array <double, wobbly::BezierMesh::TotalIndices> const &
+wobbly::BezierMesh::PointArray () const
+{
+    return priv->mPoints;
 }

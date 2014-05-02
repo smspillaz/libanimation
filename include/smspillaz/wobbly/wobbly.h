@@ -26,12 +26,21 @@ namespace wobbly
     template <typename NumericType>
     struct PointView
     {
-        PointView (std::vector <NumericType> &points,
-                   unsigned int              index) :
-            x (*((&points[0]) + index * 2)),
-            y (*((&points[0]) + index * 2 + 1))
+        typedef typename std::remove_const <NumericType>::type NumericTypeMut;
+
+        template <std::size_t N>
+        PointView (std::array <NumericTypeMut, N> &points,
+                   unsigned int                   index) :
+            x (points.at (index * 2)),
+            y (points.at (index * 2 + 1))
         {
-            assert (index * 2 < points.size ());
+        }
+
+        PointView (std::vector <NumericTypeMut> &points,
+                   unsigned int                 index) :
+            x (points.at (index * 2)),
+            y (points.at (index * 2 + 1))
+        {
         }
 
         PointView (PointView &&view) :
@@ -101,15 +110,16 @@ namespace wobbly
             virtual ~ImmediatelyMovablePosition () {};
 
             virtual void MoveByDelta (Vector const &) = 0;
+            virtual Vector DeltaTo (Vector const &) = 0;
     };
 
     class Object
     {
         public:
 
-            explicit Object (PointView <double> &&position,
-                             PointView <double> &&velocity,
-                             PointView <double> &&force) noexcept;
+            Object (PointView <double> &&position,
+                    PointView <double> &&velocity,
+                    PointView <double> &&force) noexcept;
             Object (Object &&object) noexcept;
             ~Object ();
 
@@ -140,8 +150,15 @@ namespace wobbly
                     AnchorGrab (AnchorGrab &&);
                     void MoveBy (Point const &delta);
 
+                    typedef ImmediatelyMovablePosition IMP;
+                    typedef std::function <void (IMP &)> Notify;
+                    typedef Notify GrabNotify;
+                    typedef Notify ReleaseNotify;
+
                     AnchorGrab (ImmediatelyMovablePosition &position,
-                                unsigned int               &lockCount);
+                                unsigned int               &lockCount,
+                                GrabNotify const           &grab,
+                                ReleaseNotify const        &release);
                     ~AnchorGrab ();
 
                 private:
@@ -151,12 +168,17 @@ namespace wobbly
 
                     ImmediatelyMovablePosition &position;
                     unsigned int               &lockCount;
+                    ReleaseNotify              release;
             };
 
             AnchorGrab Grab ();
+            AnchorGrab Grab (AnchorGrab::GrabNotify const &grab,
+                             AnchorGrab::ReleaseNotify const &release);
             PointView <double> const & Position () const;
 
         private:
+
+            bool IsAnchored () const;
 
             class Private;
             std::unique_ptr <Private> priv;
@@ -176,6 +198,7 @@ namespace wobbly
             Spring & operator= (Spring const &spring) = delete;
 
             bool applyForces (float springConstant);
+            bool applyForces (float springConstant, float forceRatio);
             void scaleLength (Vector scaleFactor);
 
             static constexpr double ClipThreshold = 1.0;
@@ -195,11 +218,27 @@ namespace wobbly
 
             static constexpr unsigned int Width = 4;
             static constexpr unsigned int Height = 4;
+            static constexpr unsigned int TotalIndices = Width * Height * 2;
 
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
+
+            /* Direct access to the points in this mesh is permitted.
+             *
+             * PointForIndex is just a convenience function to get a PointView
+             * by an x, y index.
+             *
+             * PointArray gets the entire array at once and should be used
+             * where the array is being accessed sequentially */
             PointView <double> PointForIndex (unsigned int width,
-                                              unsigned int height) const;
+                                              unsigned int height);
+
+            std::array <double, TotalIndices> & PointArray ();
+
+            PointView <double const> PointForIndex (unsigned int width,
+                                                    unsigned int height) const;
+
+            std::array <double, TotalIndices> const & PointArray () const;
 
         private:
 
@@ -258,6 +297,10 @@ namespace wobbly
 BOOST_GEOMETRY_REGISTER_POINT_2D (wobbly::PointView <double>,
                                   double,
                                   wobbly::bg::cs::cartesian, x, y)
+
+BOOST_GEOMETRY_REGISTER_POINT_2D_CONST (wobbly::PointView <double const>,
+                                        double,
+                                        wobbly::bg::cs::cartesian, x, y)
 
 BOOST_GEOMETRY_REGISTER_POINT_2D (wobbly::Point,
                                   double,

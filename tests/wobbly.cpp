@@ -488,10 +488,10 @@ namespace
                 bg::assign (first.force, wobbly::Vector (0, 0));
                 bg::assign (second.force, wobbly::Vector (0, 0));
                 bg::assign (first.position,
-                            wobbly::Vector (FirstPositionX - delta * 0.5,
+                            wobbly::Vector (FirstPositionX - delta,
                                             FirstPositionY));
                 bg::assign (second.position,
-                            wobbly::Vector (SecondPositionX + delta * 0.5,
+                            wobbly::Vector (SecondPositionX + delta,
                                             SecondPositionY));
 
                 spring.applyForces (SpringConstant);
@@ -556,6 +556,39 @@ namespace
         spring.scaleLength (wobbly::Vector (SpringScaleFactor,
                                             SpringScaleFactor));
         EXPECT_FALSE (spring.applyForces (SpringConstant));
+    }
+
+    TEST_F (Springs, ForceLinearlyDiminishedByInterpolation)
+    {
+        /* As we go up in distance (expressed as a ratio) from
+         * our anchors, we want our force to be reduced by that
+         * ratio */
+        unsigned int const nSamples = 10;
+        double const sampleMax = std::pow (2, nSamples);
+        unsigned int const delta = 100;
+
+        std::function <double (int)> forceReduction =
+            [this, delta, sampleMax](int value) -> double {
+                double const xValue =  value;
+                double const xValueAsRatio = xValue / sampleMax;
+
+                bg::assign (first.force, wobbly::Vector (0, 0));
+                bg::assign (second.force, wobbly::Vector (0, 0));
+                bg::assign (first.position,
+                            wobbly::Vector (FirstPositionX - delta,
+                                            FirstPositionY));
+                bg::assign (second.position,
+                            wobbly::Vector (SecondPositionX + delta,
+                                            SecondPositionY));
+
+                spring.applyForces (SpringConstant, xValueAsRatio);
+
+                return bg::get <0> (first.force);
+           };
+
+        EXPECT_THAT (forceReduction,
+                     SatisfiesModel (Linear <double> (),
+                                     WithSamples (nSamples)));
     }
 
     constexpr float TextureWidth = 50.0f;
@@ -1055,6 +1088,8 @@ namespace
                                                 wobbly::Point (0, 0));
         EXPECT_TRUE (model.StepModel (1));
     }
+
+    /* We need a test for ratio-based force distribution */
 
     float TileWidth (float width, unsigned int nHorizontalTiles)
     {
