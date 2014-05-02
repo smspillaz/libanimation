@@ -117,9 +117,10 @@ namespace wobbly
     {
         public:
 
-            Object (PointView <double> &&position,
-                    PointView <double> &&velocity,
-                    PointView <double> &&force) noexcept;
+            Object (PointView <double>       &&position,
+                    PointView <double>       &&velocity,
+                    PointView <double const> &&force,
+                    PointView <double const> &&immediateMovement) noexcept;
             Object (Object &&object) noexcept;
             ~Object ();
 
@@ -188,8 +189,12 @@ namespace wobbly
     {
         public:
 
-            Spring (Object &a,
-                    Object &b,
+            Spring (PointView <double> &&forceA,
+                    PointView <double> &&forceB,
+                    PointView <double const> &&posA,
+                    PointView <double const> &&posB,
+                    PointView <double> &&immediateA,
+                    PointView <double> &&immediateB,
                     Vector distance);
             Spring (Spring &&spring) noexcept;
             ~Spring ();
