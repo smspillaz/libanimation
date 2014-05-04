@@ -1,5 +1,5 @@
 /*
- * tests/wobbly.cpp
+ * tests/wobbly_test.cpp
  *
  * Tests for the "wobbly" spring model.
  *
@@ -9,14 +9,21 @@
 #include <iostream>
 #include <gmock/gmock.h>
 #include <boost/geometry/algorithms/assign.hpp>
-#include <boost/geometry/util/for_each_coordinate.hpp>
 
 #include <mathematical_model_matcher.h>
 
 #include <smspillaz/wobbly/wobbly.h>
 
+using ::testing::_;
+using ::testing::AtLeast;
 using ::testing::ElementsAreArray;
+using ::testing::Eq;
+using ::testing::Invoke;
+using ::testing::MakeMatcher;
 using ::testing::Matcher;
+using ::testing::MatcherCast;
+using ::testing::MatcherInterface;
+using ::testing::MatchResultListener;
 using ::testing::Not;
 using ::testing::Test;
 using ::testing::ValuesIn;
@@ -25,7 +32,7 @@ using ::testing::WithParamInterface;
 using ::wobbly::matchers::GeometricallyEqual;
 using ::wobbly::matchers::SatisfiesModel;
 using ::wobbly::matchers::WithSamples;
-using ::wobbly::matchers::WithToleranace;
+using ::wobbly::matchers::WithTolerance;
 
 using ::wobbly::models::ExponentialDecayTowards;
 using ::wobbly::models::Linear;
@@ -101,14 +108,9 @@ namespace
                 return wobbly::PointView <double> (storage, 2);
             }
 
-            wobbly::PointView <double> ImmediateMovement ()
-            {
-                return wobbly::PointView <double> (storage, 3);
-            }
-
         private:
 
-            std::array <double, 8> storage;
+            std::array <double, 6> storage;
     };
 
     class SingleObjectStorageView
@@ -118,15 +120,13 @@ namespace
             SingleObjectStorageView (SingleObjectStorage &storage) :
                 position (storage.Position ()),
                 velocity (storage.Velocity ()),
-                force (storage.Force ()),
-                immediateMovement (storage.ImmediateMovement ())
+                force (storage.Force ())
             {
             }
 
             wobbly::PointView <double> position;
             wobbly::PointView <double> velocity;
             wobbly::PointView <double> force;
-            wobbly::PointView <double> immediateMovement;
     };
 
     class LockedObject :
@@ -141,7 +141,7 @@ namespace
                 object (storage.Position (),
                         storage.Velocity (),
                         storage.Force (),
-                        storage.ImmediateMovement ()),
+                        wobbly::Point (0, 0)),
                 grab (new wobbly::Object::AnchorGrab (object.Grab ()))
             {
                 bg::assign_point (view.position, Position);
@@ -192,7 +192,7 @@ namespace
                 wobbly::Object object (storage.Position (),
                                        storage.Velocity (),
                                        storage.Force (),
-                                       storage.ImmediateMovement ());
+                                       wobbly::Point (1, 1));
                 object.Step (timestep);
 
                 return bg::get <0> (view.velocity);
@@ -208,7 +208,7 @@ namespace
         wobbly::Object a (storage.Position (),
                           storage.Velocity (),
                           storage.Force (),
-                          storage.ImmediateMovement ());
+                          wobbly::Point (1, 1));
         EXPECT_NO_THROW ({
             wobbly::Object b (std::move (a));
         });
@@ -224,7 +224,7 @@ namespace
                 object (storage.Position (),
                         storage.Velocity (),
                         storage.Force (),
-                        storage.ImmediateMovement ()),
+                        wobbly::Point (1, 1)),
                 mOldFriction (wobbly::Object::Friction)
             {
                 wobbly::Object::Friction = 0.0f;
@@ -345,7 +345,7 @@ namespace
         wobbly::Object object (storage.Position (),
                                storage.Velocity (),
                                storage.Force (),
-                               storage.ImmediateMovement ());
+                               storage.Ratio ());
 
         object.Step (1);
 
@@ -370,8 +370,6 @@ namespace
                               storageB.Force (),
                               storageA.Position (),
                               storageB.Position (),
-                              storageA.ImmediateMovement (),
-                              storageB.ImmediateMovement (),
                               wobbly::Vector (0, 0));
             wobbly::Spring b (std::move (a));
         });
@@ -388,19 +386,17 @@ namespace
                 firstObject (firstStorage.Position (),
                              firstStorage.Velocity (),
                              firstStorage.Force (),
-                             firstStorage.ImmediateMovement ()),
+                             wobbly::Point (0, 0)),
                 secondObject (secondStorage.Position (),
                               secondStorage.Velocity (),
                               secondStorage.Force (),
-                              secondStorage.ImmediateMovement ()),
+                              wobbly::Point (0, 1)),
                 first (firstStorage),
                 second (secondStorage),
                 spring (firstStorage.Force (),
                         secondStorage.Force (),
                         firstStorage.Position (),
                         secondStorage.Position (),
-                        firstStorage.ImmediateMovement (),
-                        secondStorage.ImmediateMovement (),
                         desiredDistance)
             {
                 bg::assign_point (first.position,
@@ -580,7 +576,7 @@ namespace
     TEST_F (Springs, NoForceAfterLengthScaledAndObjectsMoved)
     {
         /* Calculate distance between first and second, then adjust
-         * second's position to be distance * scaleFactor */
+         * second object's position to be distance * scaleFactor */
         wobbly::Vector distance;
         bg::assign (distance, second.position);
         bg::subtract_point (distance, first.position);
@@ -591,39 +587,6 @@ namespace
         spring.scaleLength (wobbly::Vector (SpringScaleFactor,
                                             SpringScaleFactor));
         EXPECT_FALSE (spring.applyForces (SpringConstant));
-    }
-
-    TEST_F (Springs, ForceLinearlyDiminishedByInterpolation)
-    {
-        /* As we go up in distance (expressed as a ratio) from
-         * our anchors, we want our force to be reduced by that
-         * ratio */
-        unsigned int const nSamples = 10;
-        double const sampleMax = std::pow (2, nSamples);
-        unsigned int const delta = 100;
-
-        std::function <double (int)> forceReduction =
-            [this, delta, sampleMax](int value) -> double {
-                double const xValue =  value;
-                double const xValueAsRatio = xValue / sampleMax;
-
-                bg::assign (first.force, wobbly::Vector (0, 0));
-                bg::assign (second.force, wobbly::Vector (0, 0));
-                bg::assign (first.position,
-                            wobbly::Vector (FirstPositionX - delta,
-                                            FirstPositionY));
-                bg::assign (second.position,
-                            wobbly::Vector (SecondPositionX + delta,
-                                            SecondPositionY));
-
-                spring.applyForces (SpringConstant, xValueAsRatio);
-
-                return bg::get <0> (first.force);
-            };
-
-        EXPECT_THAT (forceReduction,
-                     SatisfiesModel (Linear <double> (),
-                                     WithSamples (nSamples)));
     }
 
     constexpr float TextureWidth = 50.0f;
@@ -993,13 +956,15 @@ namespace
         wobbly::Model::Settings lowerSpringKSettings =
         {
             wobbly::Model::DefaultSpringConstant - 2.0f,
-            wobbly::Object::Friction
+            wobbly::Object::Friction,
+            wobbly::Model::DefaultObjectRange
         };
 
         wobbly::Model::Settings higherSpringKSettings =
         {
             wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction
+            wobbly::Object::Friction,
+            wobbly::Model::DefaultObjectRange
         };
 
         wobbly::Model lowerSpringKModel (wobbly::Vector (0, 0),
@@ -1023,13 +988,15 @@ namespace
         wobbly::Model::Settings lowerFrictionSettings =
         {
             wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction
+            wobbly::Object::Friction,
+            wobbly::Model::DefaultObjectRange
         };
 
         wobbly::Model::Settings higherFrictionSettings =
         {
             wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction + 2.0f
+            wobbly::Object::Friction + 2.0f,
+            wobbly::Model::DefaultObjectRange
         };
 
         wobbly::Model lowerFrictionModel (wobbly::Vector (0, 0),
@@ -1126,7 +1093,45 @@ namespace
         EXPECT_TRUE (model.StepModel (1));
     }
 
-    /* We need a test for ratio-based force distribution */
+    class MockImmediatelyMovablePosition :
+        public wobbly::ImmediatelyMovablePosition
+    {
+        public:
+
+            MockImmediatelyMovablePosition (wobbly::Vector const &position) :
+                position (position)
+            {
+                EXPECT_CALL (*this, MoveByDelta (_)).Times (AtLeast (0));
+                EXPECT_CALL (*this, DeltaTo (_)).Times (AtLeast (0));
+                EXPECT_CALL (*this, Index ()).Times (AtLeast (0));
+                EXPECT_CALL (*this, Position ()).Times (AtLeast (0));
+
+                auto deltaToDelegate =
+                    &MockImmediatelyMovablePosition::DeltaToDelegate;
+
+                ON_CALL (*this, DeltaTo (_))
+                    .WillByDefault (Invoke (this, deltaToDelegate));
+            }
+
+            MOCK_METHOD1 (MoveByDelta, void (wobbly::Vector const &));
+            MOCK_CONST_METHOD1 (DeltaTo,
+                                wobbly::Vector (wobbly::Vector const &));
+            MOCK_CONST_METHOD0 (Position,
+                                wobbly::PointView <double> const & ());
+            MOCK_CONST_METHOD0 (Index, wobbly::Point const & ());
+
+        private:
+
+            wobbly::Vector
+            DeltaToDelegate (wobbly::Vector const &v)
+            {
+                wobbly::Vector delta (v);
+                bg::subtract_point (delta, position);
+                return delta;
+            }
+
+            wobbly::Vector position;
+    };
 
     float TileWidth (float width, unsigned int nHorizontalTiles)
     {
@@ -1212,7 +1217,8 @@ namespace
 
                 float const unitLookupValue =
                     lookupValue / static_cast <float> (pow (2, nSamples));
-                auto const lookup (wobbly::Point (unitLookupValue, 0.0));
+                auto const lookup (wobbly::Point (unitLookupValue,
+                                                  unitLookupValue));
                 auto p (mesh.DeformUnitCoordsToMeshSpace (lookup));
 
                 return result (p);
@@ -1240,7 +1246,7 @@ namespace
         EXPECT_THAT (horizontalDeformation,
                      SatisfiesModel (Linear <double> (),
                                      WithSamples (nSamples),
-                                     WithToleranace (10e-5)));
+                                     WithTolerance (10e-5)));
     }
 
     TEST_F (BezierMesh, LinearVerticalDeformationForUniformScale)
@@ -1262,7 +1268,7 @@ namespace
         EXPECT_THAT (verticalDeformation,
                      SatisfiesModel (Linear <double> (),
                                      WithSamples (nSamples),
-                                     WithToleranace (10e-5)));
+                                     WithTolerance (10e-5)));
     }
 
     /* Its somewhat difficult to test the non-linear case, considering
@@ -1284,13 +1290,13 @@ namespace
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
                                          return bg::get <0> (p);
                                      },
-            mesh,
-            nSamples);
+                                     mesh,
+                                     nSamples);
 
         EXPECT_THAT (horizontalDeformation,
                      Not (SatisfiesModel (Linear <double> (),
                                           WithSamples (nSamples),
-                                          WithToleranace (10e-5))));
+                                          WithTolerance (10e-5))));
     }
 
     TEST_F (BezierMesh, ExtremesAreTextureEdges)
@@ -1316,7 +1322,8 @@ namespace
 
     wobbly::Point TexturePrediction (wobbly::Point const &unit)
     {
-        wobbly::Point textureRelative (unit);
+        wobbly::Point textureRelative (bg::get <1> (unit),
+                                       bg::get <0> (unit));
         bg::multiply_point (textureRelative,
                             wobbly::Point (TextureWidth, TextureHeight));
         PointCeiling (textureRelative);

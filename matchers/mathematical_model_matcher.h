@@ -610,11 +610,11 @@ namespace wobbly
                 unsigned int nSamples;
         };
 
-        class WithToleranace
+        class WithTolerance
         {
             public:
 
-                WithToleranace (double tolernace) :
+                WithTolerance (double tolernace) :
                     tolernace (tolernace)
                 {
                 }
@@ -628,7 +628,7 @@ namespace wobbly
         inline t::Matcher <typename FactoryFunc::Model::Generator>
         SatisfiesModel (FactoryFunc const &factory,
                         WithSamples       sm = NSamples,
-                        WithToleranace    to = Tolerance)
+                        WithTolerance to = Tolerance)
         {
             auto modelFactory (factory.Create ());
             typedef typename FactoryFunc::Model::NumericType NumericType;

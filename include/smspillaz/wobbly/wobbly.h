@@ -131,7 +131,11 @@ namespace wobbly
 
             virtual void MoveByDelta (Vector const &) = 0;
             virtual Vector DeltaTo (Vector const &) const = 0;
+            virtual wobbly::PointView <double> const & Position () const = 0;
+            virtual Point const & Index () const = 0;
     };
+
+    typedef std::reference_wrapper <ImmediatelyMovablePosition> IMPRef;
 
     class Object
     {
@@ -140,7 +144,7 @@ namespace wobbly
             Object (PointView <double>       &&position,
                     PointView <double>       &&velocity,
                     PointView <double const> &&force,
-                    PointView <double const> &&immediateMovement) noexcept;
+                    Point                    &&index) noexcept;
             Object (Object &&object) noexcept;
             ~Object ();
 
@@ -212,8 +216,6 @@ namespace wobbly
                     PointView <double> &&forceB,
                     PointView <double const> &&posA,
                     PointView <double const> &&posB,
-                    PointView <double> &&immediateA,
-                    PointView <double> &&immediateB,
                     Vector distance);
             Spring (Spring &&spring) noexcept;
             ~Spring ();
@@ -221,11 +223,10 @@ namespace wobbly
             Spring (Spring const &spring) = delete;
             Spring & operator= (Spring const &spring) = delete;
 
-            bool applyForces (float springConstant);
-            bool applyForces (float springConstant, float forceRatio);
+            bool applyForces (double springConstant);
             void scaleLength (Vector scaleFactor);
 
-            static constexpr double ClipThreshold = 1.0;
+            static constexpr double ClipThreshold = 0.25;
 
         private:
 
@@ -244,6 +245,8 @@ namespace wobbly
             static constexpr unsigned int Height = 4;
             static constexpr unsigned int TotalIndices = Width * Height * 2;
 
+            typedef std::array <double, TotalIndices> MeshArray;
+
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
 
@@ -254,15 +257,13 @@ namespace wobbly
              *
              * PointArray gets the entire array at once and should be used
              * where the array is being accessed sequentially */
-            PointView <double> PointForIndex (unsigned int width,
-                                              unsigned int height);
+            PointView <double> PointForIndex (size_t x, size_t y);
 
-            std::array <double, TotalIndices> & PointArray ();
+            MeshArray & PointArray ();
 
-            PointView <double const> PointForIndex (unsigned int width,
-                                                    unsigned int height) const;
+            PointView <double const> PointForIndex (size_t x, size_t y) const;
 
-            std::array <double, TotalIndices> const & PointArray () const;
+            MeshArray const & PointArray () const;
 
         private:
 
@@ -278,15 +279,16 @@ namespace wobbly
             {
                 float springConstant;
                 float friction;
+                float maximumRange;
             };
 
             Model (Point const &initialPosition,
-                   float width,
-                   float height,
+                   double width,
+                   double height,
                    Settings &settings);
             Model (Point const &initialPosition,
-                   float width,
-                   float height);
+                   double width,
+                   double height);
             Model (Model const &other);
             ~Model ();
 
@@ -301,13 +303,14 @@ namespace wobbly
 
             void MoveModelTo (Point const &point);
             void MoveModelBy (Point const &delta);
-            void ResizeModel (float width, float height);
+            void ResizeModel (double width, double height);
             bool StepModel (unsigned int millisecondsDelta);
 
             Point DeformTexcoords (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
 
             static constexpr float DefaultSpringConstant = 8.0;
+            static constexpr float DefaultObjectRange = 500.0f;
 
         private:
 
