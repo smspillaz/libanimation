@@ -19,6 +19,9 @@
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/geometries/register/point.hpp>
 
+#include <boost/utility/enable_if.hpp>
+#include <cstdio>
+
 namespace wobbly
 {
     namespace bg = boost::geometry;
@@ -26,24 +29,32 @@ namespace wobbly
     template <typename NumericType>
     struct PointView
     {
-        typedef typename std::remove_const <NumericType>::type NumericTypeMut;
+        typedef typename std::remove_const <NumericType>::type NTM;
+        typedef typename std::add_const <NumericType>::type NTC;
 
         template <std::size_t N>
-        PointView (std::array <NumericTypeMut, N> &points,
-                   unsigned int                   index) :
+        PointView (std::array <NTM, N> &points,
+                   std::size_t         index) :
             x (points.at (index * 2)),
             y (points.at (index * 2 + 1))
         {
         }
 
-        PointView (std::vector <NumericTypeMut> &points,
-                   unsigned int                 index) :
+        PointView (std::vector <NTM> &points,
+                   std::size_t       index) :
             x (points.at (index * 2)),
             y (points.at (index * 2 + 1))
         {
         }
 
-        PointView (PointView &&view) :
+        PointView (NTM         *points,
+                   std::size_t index) :
+            x (points[index * 2]),
+            y (points[index * 2 + 1])
+        {
+        }
+
+        PointView (PointView <NumericType> &&view) :
             x (view.x),
             y (view.y)
         {
@@ -51,6 +62,15 @@ namespace wobbly
 
         PointView (PointView <NumericType> const &p) = delete;
         PointView & operator= (PointView <NumericType> const &p) = delete;
+
+        /* cppcheck thinks this is a constructor, so we need to suppress
+         * a constructor warning here.
+         */
+        // cppcheck-suppress uninitMemberVar
+        operator PointView <NTC> ()
+        {
+            return PointView <NTC> (&this->x, 0);
+        }
 
         NumericType &x;
         NumericType &y;
@@ -137,7 +157,6 @@ namespace wobbly
              * to a grab */
             typedef std::function <void (PointView <double> &)> PositionFunc;
 
-            bool ApplyForce (Vector const &force);
             void ModifyPosition (PositionFunc const &modifier);
 
             /* Default values */
