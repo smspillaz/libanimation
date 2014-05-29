@@ -155,6 +155,51 @@ wobbly::Object::~Object ()
 {
 }
 
+namespace boost
+{
+    namespace geometry
+    {
+        /* There is a bug in boost where a concept check was used on
+         * the second point only, making it impossible to add from
+         * a const type
+         */
+        namespace fixups
+        {
+            template <typename Point1, typename Point2>
+            inline void assign_point (Point1 &p1, Point2 const &p2)
+            {
+                BOOST_CONCEPT_ASSERT ((concept::Point <Point1>));
+                BOOST_CONCEPT_ASSERT ((concept::ConstPoint <Point2>));
+
+                for_each_coordinate (p1,
+                                     detail::point_assignment <Point2> (p2));
+            }
+
+            template <typename Point1, typename Point2>
+            inline void subtract_point (Point1 &p1, Point2 const &p2)
+            {
+                BOOST_CONCEPT_ASSERT ((concept::Point <Point1>));
+                BOOST_CONCEPT_ASSERT ((concept::ConstPoint <Point2>));
+
+                for_each_coordinate (p1,
+                                     detail::point_operation <Point2,
+                                                              std::minus> (p2));
+            }
+
+            template <typename Point1, typename Point2>
+            inline void add_point (Point1 &p1, Point2 const &p2)
+            {
+                BOOST_CONCEPT_ASSERT ((concept::Point <Point1>));
+                BOOST_CONCEPT_ASSERT ((concept::ConstPoint <Point2>));
+
+                for_each_coordinate (p1,
+                                     detail::point_operation <Point2,
+                                                              std::plus> (p2));
+            }
+        }
+    }
+}
+
 namespace
 {
     class ClipOperation
@@ -210,7 +255,7 @@ namespace
         bg::assign (ret, p);
         MakeAbsolute (ret);
         return ret;
-    } 
+    }
 
     template <typename Velocity, typename Force>
     void ApplyAccelerativeForce (Velocity &velocity,
@@ -219,7 +264,7 @@ namespace
                                  float    time)
     {
         wobbly::Vector acceleration;
-        bg::assign_point (acceleration, force);
+        bg::fixups::assign_point (acceleration, force);
         bg::divide_value (acceleration, mass);
 
         /* v[t] = v[t - 1] + at */
@@ -238,14 +283,16 @@ namespace
 
         /* Apply friction, which is exponentially
          * proportional to both velocity and time */
+        wobbly::Vector totalForce;
+        bg::fixups::assign_point (totalForce, force);
         wobbly::Vector frictionForce;
         bg::assign_point (frictionForce, velocity);
         bg::multiply_value (frictionForce, friction);
-        bg::subtract_point (force, frictionForce);
+        bg::fixups::subtract_point (totalForce, frictionForce);
 
         /* First apply velocity change for force
          * exerted over time */
-        ApplyAccelerativeForce (velocity, force, mass, time);
+        ApplyAccelerativeForce (velocity, totalForce, mass, time);
 
         /* Clip velocity */
         PointClip (velocity, 0.05);
@@ -257,8 +304,9 @@ namespace
         wobbly::Vector positionDelta;
         bg::assign_point (positionDelta, velocity);
         bg::multiply_value (positionDelta, time / 2);
+
         bg::add_point (position, positionDelta);
-        bg::add_point (position, immediate);
+        //bg::fixups::add_point (position, immediate);
 
         /* Return true if we still have velocity remaining */
         return std::fabs (bg::get <0> (velocity)) > 0.00 ||
@@ -450,22 +498,21 @@ wobbly::Spring::applyForces (float springConstant, float forceRatio)
     Vector deltaA (DetermineDeltaBetweenPointsFromDesired (priv->posA,
                                                            priv->posB,
                                                            desiredNegative));
-    Vector deltaB (DetermineDeltaBetweenPointsFromDesired (priv->posA,
-                                                           priv->posB,
+    Vector deltaB (DetermineDeltaBetweenPointsFromDesired (priv->posB,
+                                                           priv->posA,
                                                            desiredDistance));
 
     PointClip (deltaA, ClipThreshold);
     PointClip (deltaB, ClipThreshold);
 
-    bg::assign (priv->forceA, deltaA);
-    bg::assign (priv->forceB, deltaB);
+    Vector springForceA (deltaA);
+    Vector springForceB (deltaB);
 
-    /* First multiply by force ratio, the greater the
-     * ratio, the greater the force */
-    springConstant *= forceRatio;
+    bg::multiply_value (springForceA, springConstant * forceRatio);
+    bg::multiply_value (springForceB, springConstant * forceRatio);
 
-    bg::multiply_value (priv->forceA, springConstant);
-    bg::multiply_value (priv->forceB, springConstant);
+    bg::add_point (priv->forceA, springForceA);
+    bg::add_point (priv->forceB, springForceB);
 
     /* Calculate immediate movement as the inverse of any
      * delta remaining */
@@ -559,8 +606,6 @@ wobbly::Model::Private::Private (Point const &initialPosition,
 
     /* Keep track of positions */
     auto &mutablePositions = mMesh.PointArray ();
-    auto &constPositions =
-        const_cast <BezierMesh *> (&mMesh)->PointArray ();
 
     for (size_t i = 0; i < objectsSize; ++i)
     {
@@ -574,8 +619,8 @@ wobbly::Model::Private::Private (Point const &initialPosition,
                               row * tileHeight));
 
         wobbly::PointView <double> velocity (mVelocities, i);
-        wobbly::PointView <double> force (mForces, i);
-        wobbly::PointView <double> immediateMovement (mImmediateMoves, i);
+        wobbly::PointView <double const> force (mForces, i);
+        wobbly::PointView <double const> immediateMovement (mImmediateMoves, i);
 
         mObjects.emplace_back (std::move (position),
                                std::move (velocity),
@@ -603,8 +648,8 @@ wobbly::Model::Private::Private (Point const &initialPosition,
             {
                 mSprings.emplace_back (DPV (mForces, current),
                                        DPV (mForces, below),
-                                       CDPV (constPositions, current),
-                                       CDPV (constPositions, below),
+                                       CDPV (mutablePositions, current),
+                                       CDPV (mutablePositions, below),
                                        DPV (mImmediateMoves, current),
                                        DPV (mImmediateMoves, below),
                                        Vector (0.0, tileHeight));
@@ -615,8 +660,8 @@ wobbly::Model::Private::Private (Point const &initialPosition,
             {
                 mSprings.emplace_back (DPV (mForces, current),
                                        DPV (mForces, right),
-                                       CDPV (constPositions, current),
-                                       CDPV (constPositions, right),
+                                       CDPV (mutablePositions, current),
+                                       CDPV (mutablePositions, right),
                                        DPV (mImmediateMoves, current),
                                        DPV (mImmediateMoves, right),
                                        Vector (tileWidth, 0.0f));
@@ -732,7 +777,7 @@ wobbly::Model::GrabAnchor (Point const &position)
             anchored.erase (std::remove_if (anchored.begin (),
                                             anchored.end (),
                                             [&pos](IMPRef const &imp) -> bool {
-                                                return &(imp.get()) == &pos;
+                                                return &(imp.get ()) == &pos;
                                             }),
                             anchored.end ());
         };
@@ -744,7 +789,7 @@ void
 wobbly::Model::MoveModelBy (Point const &delta)
 {
     auto &points (priv->mMesh.PointArray ());
-    const size_t nPoints = points.size () / 2;
+    size_t const nPoints = points.size () / 2;
     for (size_t i = 0; i < nPoints; ++i)
     {
         PointView <double> pv (points, i);
@@ -950,6 +995,10 @@ wobbly::Model::StepModel (unsigned int time)
      * might need to change in the future */
     while (steps--)
     {
+        /* Reset force map */
+        priv->mForces.assign (priv->mForces.size (), 0.0);
+        priv->mImmediateMoves.assign (priv->mImmediateMoves.size (), 0.0);
+
         /* Calculate forces */
         for (auto &spring : priv->mSprings)
             moreStepsRequired |=

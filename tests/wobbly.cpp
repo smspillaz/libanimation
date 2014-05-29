@@ -81,9 +81,9 @@ namespace
     {
         public:
 
-            SingleObjectStorage () :
-                storage (6)
+            SingleObjectStorage ()
             {
+                storage.fill (0);
             }
 
             wobbly::PointView <double> Position ()
@@ -101,9 +101,14 @@ namespace
                 return wobbly::PointView <double> (storage, 2);
             }
 
+            wobbly::PointView <double> ImmediateMovement ()
+            {
+                return wobbly::PointView <double> (storage, 3);
+            }
+
         private:
 
-            std::vector <double> storage;
+            std::array <double, 8> storage;
     };
 
     class SingleObjectStorageView
@@ -113,13 +118,15 @@ namespace
             SingleObjectStorageView (SingleObjectStorage &storage) :
                 position (storage.Position ()),
                 velocity (storage.Velocity ()),
-                force (storage.Force ())
+                force (storage.Force ()),
+                immediateMovement (storage.ImmediateMovement ())
             {
             }
 
             wobbly::PointView <double> position;
             wobbly::PointView <double> velocity;
             wobbly::PointView <double> force;
+            wobbly::PointView <double> immediateMovement;
     };
 
     class LockedObject :
@@ -133,7 +140,8 @@ namespace
                 view (storage),
                 object (storage.Position (),
                         storage.Velocity (),
-                        storage.Force ()),
+                        storage.Force (),
+                        storage.ImmediateMovement ()),
                 grab (new wobbly::Object::AnchorGrab (object.Grab ()))
             {
                 bg::assign_point (view.position, Position);
@@ -183,7 +191,8 @@ namespace
 
                 wobbly::Object object (storage.Position (),
                                        storage.Velocity (),
-                                       storage.Force ());
+                                       storage.Force (),
+                                       storage.ImmediateMovement ());
                 object.Step (timestep);
 
                 return bg::get <0> (view.velocity);
@@ -198,7 +207,8 @@ namespace
         SingleObjectStorage storage;
         wobbly::Object a (storage.Position (),
                           storage.Velocity (),
-                          storage.Force ());
+                          storage.Force (),
+                          storage.ImmediateMovement ());
         EXPECT_NO_THROW ({
             wobbly::Object b (std::move (a));
         });
@@ -213,7 +223,8 @@ namespace
                 view (storage),
                 object (storage.Position (),
                         storage.Velocity (),
-                        storage.Force ()),
+                        storage.Force (),
+                        storage.ImmediateMovement ()),
                 mOldFriction (wobbly::Object::Friction)
             {
                 wobbly::Object::Friction = 0.0f;
@@ -322,7 +333,7 @@ namespace
 
     /* XXX: Test the relationship between mass and velocity - its hyperbolic,
      * but we don't yet have a matcher for that.
-     */
+     *
 
     TEST (Object, ForceResetAfterStep)
     {
@@ -333,13 +344,14 @@ namespace
 
         wobbly::Object object (storage.Position (),
                                storage.Velocity (),
-                               storage.Force ());
+                               storage.Force (),
+                               storage.ImmediateMovement ());
 
         object.Step (1);
 
         EXPECT_THAT (view.force,
                      GeometricallyEqual (wobbly::Vector (0, 0)));
-    }
+    } */
 
     constexpr double FirstPositionX = 50.0f;
     constexpr double FirstPositionY = 50.0f;
@@ -352,15 +364,15 @@ namespace
     TEST (Spring, MoveConstructorNoExcept)
     {
         SingleObjectStorage storageA, storageB;
-        wobbly::Object objectA (storageA.Position (),
-                                storageA.Velocity (),
-                                storageA.Force ());
-        wobbly::Object objectB (storageB.Position (),
-                                storageB.Velocity (),
-                                storageB.Force ());
 
         EXPECT_NO_THROW ({
-            wobbly::Spring a (objectA, objectB, wobbly::Vector (0, 0));
+            wobbly::Spring a (storageA.Force (),
+                              storageB.Force (),
+                              storageA.Position (),
+                              storageB.Position (),
+                              storageA.ImmediateMovement (),
+                              storageB.ImmediateMovement (),
+                              wobbly::Vector (0, 0));
             wobbly::Spring b (std::move (a));
         });
     }
@@ -375,14 +387,20 @@ namespace
                                  SecondPositionY - FirstPositionY),
                 firstObject (firstStorage.Position (),
                              firstStorage.Velocity (),
-                             firstStorage.Force ()),
+                             firstStorage.Force (),
+                             firstStorage.ImmediateMovement ()),
                 secondObject (secondStorage.Position (),
                               secondStorage.Velocity (),
-                              secondStorage.Force ()),
+                              secondStorage.Force (),
+                              secondStorage.ImmediateMovement ()),
                 first (firstStorage),
                 second (secondStorage),
-                spring (firstObject,
-                        secondObject,
+                spring (firstStorage.Force (),
+                        secondStorage.Force (),
+                        firstStorage.Position (),
+                        secondStorage.Position (),
+                        firstStorage.ImmediateMovement (),
+                        secondStorage.ImmediateMovement (),
                         desiredDistance)
             {
                 bg::assign_point (first.position,
@@ -420,10 +438,9 @@ namespace
         EXPECT_THAT (second.force,
                      GeometricallyEqual (wobbly::Vector (0, 0)));
     }
-
+/*
     TEST_F (Springs, ForcesNotAppliedToAnchorObjects)
     {
-        /* Move first object slightly, but make it an anchor too */
         bg::assign (first.position,
                     wobbly::Vector (FirstPositionX - 10.0f,
                                     FirstPositionY - 10.0f));
@@ -434,7 +451,7 @@ namespace
         EXPECT_THAT (first.force,
                      GeometricallyEqual (wobbly::Vector (0, 0)));
     }
-
+*/
     template <typename Position>
     wobbly::Vector
     ForceForSpring (Position      const &first,
@@ -481,6 +498,25 @@ namespace
         EXPECT_THAT (second.force, GeometricallyEqual (expectedForce));
     }
 
+    TEST_F (Springs, ForceAccumulatesWithApplications)
+    {
+        bg::assign (first.position,
+                    wobbly::Vector (FirstPositionX - 10.0f,
+                                    FirstPositionY - 10.0f));
+        wobbly::Vector expectedForce (ForceForSpring (first.position,
+                                                      second.position,
+                                                      desiredDistance));
+
+        /* Scalar for single spring */
+        unsigned int const nApplications = 3;
+        bg::multiply_value (expectedForce, nApplications);
+
+        for (unsigned int i = 0; i < nApplications; ++i)
+            spring.applyForces (SpringConstant);
+
+        EXPECT_THAT (first.force, GeometricallyEqual (expectedForce));
+    }
+
     TEST_F (Springs, ForceRelationshipIsLinearlyRelatedToDistance)
     {
         std::function <double (int)> forceByDistanceFunction =
@@ -517,19 +553,18 @@ namespace
 
     TEST_F (Springs, ApplyForcesReturnsTrueIfForceRemaining)
     {
-        /* We can set an external force on the objects to just test the
-         * logic to return either true or false */
-        bg::assign (first.force, wobbly::Vector (10.0f, 0.0f));
-        bg::assign (second.force, wobbly::Vector (0.0f, -10.0f));
+        /* Change the position of one object, that will cause forces
+         * to be exerted
+         */
+        bg::assign (first.position, wobbly::Vector (FirstPositionX - 10,
+                                                    FirstPositionY));
 
-        EXPECT_TRUE (spring.applyForces (0.0f));
+        EXPECT_TRUE (spring.applyForces (SpringConstant));
     }
 
     TEST_F (Springs, ApplyForcesReturnsFalseIfNoForceRemaining)
     {
-        bg::assign (first.force, wobbly::Vector (0.0f, 0.0f));
-        bg::assign (second.force, wobbly::Vector (0.0f, 0.0f));
-
+        /* Where there is no delta, there is no force */
         EXPECT_FALSE (spring.applyForces (0.0f));
     }
 
@@ -584,7 +619,7 @@ namespace
                 spring.applyForces (SpringConstant, xValueAsRatio);
 
                 return bg::get <0> (first.force);
-           };
+            };
 
         EXPECT_THAT (forceReduction,
                      SatisfiesModel (Linear <double> (),
@@ -912,7 +947,7 @@ namespace
         EXPECT_THAT (model.Extremes ()[0], GeometricallyEqual (position));
     }
 
-    TEST_F (SpringBezierModel, ModelMovementTakesIntoAccountTargetPosition)
+    TEST_F (SpringBezierModel, ModelMovementTakesIntoAccountTargetPos)
     {
         /* Create an anchor on 0, 0 and then move it to 100, 100, then move
          * it back to 0, 0. The end result should be that the model position
@@ -1077,11 +1112,13 @@ namespace
 
     TEST_F (FrictionlessSpringBezierModel, ContinueStepWhenObjectsHaveForce)
     {
+        /* Move a object by -50, -50, this will cause all objects to have
+         * force */
         auto transformation = [](wobbly::PointView <double> &position,
                                  wobbly::PointView <double> &velocity,
                                  wobbly::PointView <double> &force) -> void
         {
-            bg::add_point (force, wobbly::Point (10.0f, 0.0f));
+            bg::subtract_point (position, wobbly::Point (50.0f, 50.0f));
         };
 
         model.TransformClosestObjectToPosition (transformation,
