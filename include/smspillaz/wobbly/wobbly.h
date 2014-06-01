@@ -130,7 +130,7 @@ namespace wobbly
             virtual ~ImmediatelyMovablePosition () {};
 
             virtual void MoveByDelta (Vector const &) = 0;
-            virtual Vector DeltaTo (Vector const &) = 0;
+            virtual Vector DeltaTo (Vector const &) const = 0;
     };
 
     class Object
