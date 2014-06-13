@@ -13,6 +13,7 @@
 #define WOBBLY_H
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -29,12 +30,24 @@ namespace wobbly
     template <typename NumericType>
     struct PointView
     {
+        typedef NumericType NT;
         typedef typename std::remove_const <NumericType>::type NTM;
         typedef typename std::add_const <NumericType>::type NTC;
+
+        typedef typename std::is_const <NT> IC;
 
         template <std::size_t N>
         PointView (std::array <NTM, N> &points,
                    std::size_t         index) :
+            x (points.at (index * 2)),
+            y (points.at (index * 2 + 1))
+        {
+        }
+
+        template <std::size_t N,
+                  typename = typename std::enable_if <IC::value && N>::type>
+        PointView (std::array <NTM, N> const &points,
+                   std::size_t               index) :
             x (points.at (index * 2)),
             y (points.at (index * 2 + 1))
         {
@@ -74,6 +87,55 @@ namespace wobbly
 
         NumericType &x;
         NumericType &y;
+    };
+
+    template <typename NumericType>
+    class IPointView
+    {
+        public:
+
+            typedef typename std::remove_const <NumericType>::type NTM;
+            typedef typename std::add_const <NumericType>::type NTC;
+
+            template <typename Container>
+            IPointView (Container const &container,
+                        size_t          index) :
+                index (index),
+                data (container.data ())
+            {
+                assert (index < container.size () - 1);
+            }
+
+            IPointView (NumericType *array,
+                        size_t      index) :
+                index (index),
+                data (array)
+            {
+            }
+
+            IPointView (IPointView <NumericType> const &p) = delete;
+            IPointView & operator= (IPointView <NumericType> const &p) = delete;
+
+            IPointView (IPointView <NumericType> &&view) :
+                index (view.index),
+                data (view.data)
+            {
+                view.index = 0;
+            }
+
+            /* cppcheck thinks this is a constructor, so we need to suppress
+             * a constructor warning here.
+             */
+            // cppcheck-suppress uninitMemberVar
+            operator IPointView <NTC> ()
+            {
+                return IPointView <NTC> (&this->x, 0);
+            }
+
+        private:
+
+            size_t              index;
+            NumericType * const data;
     };
 
     struct Point
@@ -136,6 +198,26 @@ namespace wobbly
     };
 
     typedef std::reference_wrapper <ImmediatelyMovablePosition> IMPRef;
+
+    class AnchorGrab
+    {
+        public:
+
+             AnchorGrab (AnchorGrab &&);
+             void MoveBy (Point const &delta);
+
+             AnchorGrab (wobbly::PointView <double> &&point,
+                         unsigned int               &lockCount);
+             ~AnchorGrab ();
+
+        private:
+
+            AnchorGrab (const AnchorGrab &) = delete;
+            AnchorGrab & operator= (const AnchorGrab &) = delete;
+
+            PointView <double> position;
+            unsigned int       &lockCount;
+    };
 
     class Object
     {
@@ -243,9 +325,11 @@ namespace wobbly
 
             static constexpr unsigned int Width = 4;
             static constexpr unsigned int Height = 4;
-            static constexpr unsigned int TotalIndices = Width * Height * 2;
+            static constexpr unsigned int TotalIndices = Width * Height;
+            static constexpr unsigned int TotalIndices2D  = TotalIndices * 2;
 
-            typedef std::array <double, TotalIndices> MeshArray;
+            typedef std::array <double, TotalIndices2D> MeshArray;
+            typedef std::array <unsigned int, TotalIndices> AnchorArray;
 
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
@@ -255,7 +339,7 @@ namespace wobbly
              * PointForIndex is just a convenience function to get a PointView
              * by an x, y index.
              *
-             * PointArray gets the entire array at once and should be used
+             * MeshArray gets the entire array at once and should be used
              * where the array is being accessed sequentially */
             PointView <double> PointForIndex (size_t x, size_t y);
 
@@ -264,6 +348,187 @@ namespace wobbly
             PointView <double const> PointForIndex (size_t x, size_t y) const;
 
             MeshArray const & PointArray () const;
+
+        private:
+
+            BezierMesh::MeshArray mPoints;
+    };
+
+    typedef std::function <wobbly::Point ()> TargetPositionQuery;
+
+    class ConstrainmentStep
+    {
+        public:
+
+            ConstrainmentStep (double const &threshold,
+                               double const &width,
+                               double const &height);
+
+            bool operator () (BezierMesh::MeshArray         &points,
+                              BezierMesh::AnchorArray const &anchors);
+
+        private:
+
+            double const &threshold;
+            double const &mWidth;
+            double const &mHeight;
+
+            BezierMesh::MeshArray targetBuffer;
+    };
+
+    class EulerIntegration
+    {
+        public:
+
+            EulerIntegration ();
+        
+            bool operator () (BezierMesh::MeshArray         &positions,
+                              BezierMesh::MeshArray const   &forces,
+                              BezierMesh::AnchorArray const &anchors,
+                              double                        friction);
+
+        private:
+
+            BezierMesh::MeshArray velocities;
+    };
+
+    class SpringMesh
+    {
+        public:
+
+            SpringMesh (BezierMesh::MeshArray &array,
+                        double       springWidth,
+                        double       springHeight);
+
+            /* Need to get rid of this later */
+            SpringMesh (SpringMesh const &step);
+
+            SpringMesh & operator= (SpringMesh other);
+
+            friend void swap (SpringMesh &first, SpringMesh &second)
+            {
+                using std::swap;
+
+                swap (first.mForces, second.mForces);
+                swap (first.mSprings, second.mSprings);
+                swap (first.springWidth, second.springWidth);
+                swap (first.springHeight, second.springHeight);
+            }
+
+            void scale (double x, double y);
+
+            BezierMesh::MeshArray &mPositions;
+            BezierMesh::MeshArray mForces;
+            std::vector <Spring> mSprings;
+
+            double springWidth;
+            double springHeight;
+
+        private:
+
+            void DistributeSprings (double width, double height);
+    };
+
+    template <class IntegrationStrategy>
+    class SpringStep
+    {
+        public:
+
+            SpringStep (BezierMesh::MeshArray &array,
+                        double const &constant,
+                        double const &friction,
+                        double       springWidth,
+                        double       springHeight) :
+                constant (constant),
+                friction (friction),
+                mesh (array, springWidth, springHeight)
+            {
+            }
+
+            /* Need to get rid of this later */
+            SpringStep (SpringStep const &step) :
+                constant (step.constant),
+                friction (step.friction),
+                strategy (step.strategy),
+                mesh (step.mesh)
+            {
+            }
+
+            friend void swap (SpringStep &first, SpringStep &second)
+            {
+                using std::swap;
+
+                swap (first.strategy, second.strategy);
+                swap (first.mesh, second.mesh);
+            }
+
+            SpringStep & operator= (SpringStep other)
+            {
+                swap (*this, other);
+
+                return *this;
+            }
+
+            void scale (double x, double y)
+            {
+                mesh.scale (x, y);
+            }
+
+            bool operator () (BezierMesh::MeshArray         &positions,
+                              BezierMesh::AnchorArray const &anchors)
+            {
+                bool more = false;
+                mesh.mForces.fill (0.0);
+                for (Spring &spring : mesh.mSprings)
+                    more |= spring.applyForces (constant);
+
+                more |= strategy (positions, mesh.mForces, anchors, friction);
+                return more;
+            }
+
+        private:
+
+            double const &constant;
+            double const &friction;
+
+            IntegrationStrategy strategy;
+            SpringMesh          mesh;
+    };
+
+    class NewModel
+    {
+        public:
+
+            struct Settings
+            {
+                double springConstant;
+                double friction;
+                double maximumRange;
+            };
+
+
+            NewModel (Point const &initialPosition,
+                      double width,
+                      double height,
+                      Settings const &settings);
+            NewModel (Point const &initialPosition,
+                      double width,
+                      double height);
+            NewModel (NewModel const &other);
+            ~NewModel ();
+
+            wobbly::AnchorGrab GrabAnchor (Point const &grab);
+
+            void MoveModelTo (Point const &point);
+            void MoveModelBy (Point const &delta);
+            void ResizeModel (double width, double height);
+            bool StepModel (unsigned int millisecondsDelta);
+            Point DeformTexcoords (Point const &normalized) const;
+            std::array <Point, 4> const Extremes () const;
+
+            static Settings const DefaultSettings;
+
+            bool Step (unsigned int ms);
 
         private:
 

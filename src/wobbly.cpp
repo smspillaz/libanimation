@@ -306,6 +306,55 @@ namespace
 
         return result;
     }
+
+    inline bool EulerIntegrateN (float time, float friction, float mass,
+                                wobbly::PointView <double>       &&position,
+                                wobbly::PointView <double>       &&velocity,
+                                wobbly::PointView <double const> &&force)
+    {
+        assert (mass > 0.0f);
+
+        /* Apply friction, which is exponentially
+         * proportional to both velocity and time */
+        printf ("Initial force: %f %f\n", bg::get <0> (force),
+                bg::get <1> (force));
+        wobbly::Vector totalForce;
+        bg::fixups::assign_point (totalForce, force);
+        wobbly::Vector frictionForce;
+        bg::assign_point (frictionForce, velocity);
+        printf ("Friction force: %f %f\n", bg::get <0> (frictionForce),
+                bg::get <1> (frictionForce));
+        bg::multiply_value (frictionForce, friction);
+        bg::fixups::subtract_point (totalForce, frictionForce);
+
+        /* First apply velocity change for force
+         * exerted over time */
+        ApplyAccelerativeForce (velocity, totalForce, mass, time);
+
+        /* Clip velocity */
+        PointClip (velocity, 0.05);
+
+        /* Distance travelled will be
+         *
+         *   d[t] = ((v[t - 1] + v[t]) / 2) * t
+         */
+        wobbly::Vector positionDelta;
+        bg::assign_point (positionDelta, velocity);
+        bg::multiply_value (positionDelta, time / 2);
+
+        bg::add_point (position, positionDelta);
+        printf ("Adding delta %f %f\n", bg::get <0> (positionDelta),
+                bg::get <1> (positionDelta));
+
+        printf ("Object velocity: %f %f\n", std::fabs (bg::get <0> (velocity)),
+                std::fabs (bg::get <1> (velocity)));
+
+        /* Return true if we still have velocity remaining */
+        bool result = std::fabs (bg::get <0> (velocity)) > 0.00 ||
+                      std::fabs (bg::get <1> (velocity)) > 0.00;
+
+        return result;
+    }
 }
 
 bool
@@ -431,6 +480,39 @@ wobbly::Object::AnchorGrab::MoveBy (Point const &delta)
     position.MoveByDelta (delta);
 }
 
+wobbly::AnchorGrab::AnchorGrab (PointView <double> &&position,
+                                unsigned int       &lockCount) :
+    position (std::move (position)),
+    lockCount (lockCount)
+{
+    ++lockCount;
+}
+
+wobbly::AnchorGrab::~AnchorGrab ()
+{
+    if (lockCount)
+        --lockCount;
+}
+
+wobbly::AnchorGrab::AnchorGrab (AnchorGrab &&grab) :
+    position (std::move (grab.position)),
+    /* This looks counter-intuitive, but its actually the result of a small
+     * detail in move semantics. The source object is still going to be
+     * destroyed which means the _shared_ lock count between the move-to
+     * object and this one is going to be decremented when the source
+     * goes out of scope. That means that we need to increment the lock
+     * count here when a move is performed.
+     */
+    lockCount (++grab.lockCount)
+{
+}
+
+void
+wobbly::AnchorGrab::MoveBy (Point const &delta)
+{
+    bg::add_point (position, delta);
+}
+
 namespace wobbly
 {
     class Spring::Private
@@ -490,6 +572,10 @@ wobbly::Spring::applyForces (double springConstant)
     Vector desiredNegative (desiredDistance);
     bg::multiply_value (desiredNegative, -1);
 
+    printf ("applying forces between (%f %f) and (%f %f)\n",
+            bg::get <0> (priv->posA), bg::get <1> (priv->posA),
+            bg::get <0> (priv->posB), bg::get <1> (priv->posB));
+    
     Vector deltaA (DetermineDeltaBetweenPointsFromDesired (priv->posA,
                                                            priv->posB,
                                                            desiredNegative));
@@ -523,6 +609,384 @@ void
 wobbly::Spring::scaleLength (Vector scaleFactor)
 {
     bg::multiply_point (priv->desiredDistance, scaleFactor);
+}
+
+wobbly::SpringMesh::SpringMesh (BezierMesh::MeshArray &points,
+                                double                springWidth,
+                                double                springHeight) :
+    mPositions (points),
+    springWidth (springWidth),
+    springHeight (springHeight)
+{
+    DistributeSprings (springWidth, springHeight);
+}
+
+wobbly::SpringMesh::SpringMesh (SpringMesh const &step)  :
+    mPositions (step.mPositions),
+    mForces (step.mForces),
+    /* We explicitly do not copy the springs and
+     * redistribute them ourselves
+     */
+    mSprings (),
+    springWidth (step.springWidth),
+    springHeight (step.springHeight)
+{
+    DistributeSprings (springWidth, springHeight);
+}
+
+wobbly::SpringMesh &
+wobbly::SpringMesh::operator= (SpringMesh other)
+{
+    swap (*this, other);
+
+    return *this;
+}
+
+void
+wobbly::SpringMesh::DistributeSprings (double springWidth, double springHeight)
+{
+    unsigned int const gridWidth = BezierMesh::Width;
+    unsigned int const gridHeight = BezierMesh::Height;
+
+    size_t const nSprings = SpringCountForGridSize (gridWidth, gridHeight);
+
+    mSprings.clear ();
+    mSprings.reserve (nSprings);
+
+    for (size_t j = 0; j < gridHeight; ++j)
+    {
+        for (size_t i = 0; i < gridWidth; ++i)
+        {
+            typedef PointView <double> DPV;
+            typedef PointView <double const> CDPV;
+
+            size_t current = j * gridWidth + i;
+            size_t below = (j + 1) * gridWidth + i;
+            size_t right = j * gridWidth + i + 1;
+            
+            printf ("Spring from %zu to (%zu %zu)\n", current, below, right);
+
+            /* Spring from us to object below us */
+            if (j < gridHeight - 1)
+            {
+                mSprings.emplace_back (DPV (mForces, current),
+                                       DPV (mForces, below),
+                                       CDPV (mPositions, current),
+                                       CDPV (mPositions, below),
+                                       Vector (0.0, springHeight));
+            }
+
+            /* Spring from us to object right of us */
+            if (i < gridWidth - 1)
+            {
+                mSprings.emplace_back (DPV (mForces, current),
+                                       DPV (mForces, right),
+                                       CDPV (mPositions, current),
+                                       CDPV (mPositions, right),
+                                       Vector (springWidth, 0.0f));
+            }
+        }
+    }
+
+    assert (mSprings.size () == nSprings);
+}
+
+void
+wobbly::SpringMesh::scale (double x, double y)
+{
+    springWidth *= x;
+    springHeight *= y;
+
+    wobbly::Vector const scaleFactor (x, y);
+
+    for (Spring &spring : mSprings)
+        spring.scaleLength (scaleFactor);
+}
+
+namespace wobbly
+{
+    class NewModel::Private
+    {
+        public:
+
+            Private (Point const &initialPosition,
+                     double      width,
+                     double      height,
+                     Settings    const &settings);
+
+            std::array <wobbly::Point, 4> const
+            Extremes () const;
+
+            wobbly::Point
+            TargetPosition () const;
+
+            BezierMesh mPositions;
+            BezierMesh::AnchorArray mAnchors;
+            SpringStep <EulerIntegration> mSpring;
+            ConstrainmentStep mConstrainment;
+
+            double mWidth, mHeight;
+            bool mCurrentlyUnequal;
+    };
+}
+
+namespace
+{
+    void CalculatePositionArray (wobbly::Point           const &initialPosition,
+                                 wobbly::BezierMesh::MeshArray &array,
+                                 size_t const                  objectsSize,
+                                 double const                  tileWidth,
+                                 double const                  tileHeight)
+    {
+        for (size_t i = 0; i < objectsSize; ++i)
+        {
+            size_t const row = i / wobbly::BezierMesh::Width;
+            size_t const column = i % wobbly::BezierMesh::Width;
+
+            wobbly::PointView <double> position (array, i);
+            bg::assign (position, initialPosition);
+            bg::add_point (position,
+                wobbly::Point (column * tileWidth,
+                               row * tileHeight));
+        }
+    }
+}
+
+wobbly::NewModel::Private::Private (Point const &initialPosition,
+                                    double      width,
+                                    double      height,
+                                    Settings    const &settings) :
+    mSpring (mPositions.PointArray (),
+             settings.springConstant,
+             settings.friction,
+             width / (BezierMesh::Width - 1),
+             height / (BezierMesh::Height - 1)),
+    mConstrainment (settings.maximumRange, width, height),
+    mWidth (width),
+    mHeight (height)
+{
+    size_t const objectsSize = ObjectCountForGridSize (BezierMesh::Width,
+                                                       BezierMesh::Height);
+
+    /* First construct the position array */
+    CalculatePositionArray (initialPosition,
+                            mPositions.PointArray (),
+                            objectsSize,
+                            width / (BezierMesh::Width - 1),
+                            height / (BezierMesh::Height - 1));
+    
+    mAnchors.fill (0);
+}
+
+wobbly::NewModel::Settings const wobbly::NewModel::DefaultSettings =
+{
+    wobbly::Model::DefaultSpringConstant,
+    wobbly::Object::Friction,
+    wobbly::Model::DefaultObjectRange
+};
+
+wobbly::NewModel::NewModel (Point const &initialPosition,
+                            double      width,
+                            double      height,
+                            Settings    const &settings) :
+    priv (new Private (initialPosition, width, height, settings))
+{
+}
+
+wobbly::NewModel::NewModel (Point const &initialPosition,
+                            double      width,
+                            double      height) :
+    priv (new Private (initialPosition, width, height, DefaultSettings))
+{
+}
+
+
+wobbly::NewModel::~NewModel ()
+{
+}
+
+namespace
+{
+    template <typename Integrator>
+    bool PerformIntegration (wobbly::BezierMesh::MeshArray         &positions,
+                             wobbly::BezierMesh::AnchorArray const &anchors,
+                             Integrator                            &&integrator)
+    {
+        return integrator (positions, anchors);
+    }
+
+    template <typename Integrator, typename... Remaining>
+    bool PerformIntegration (wobbly::BezierMesh::MeshArray         &positions,
+                             wobbly::BezierMesh::AnchorArray const &anchors,
+                             Integrator                            &&integrator,
+                             Remaining...                          remaining)
+    {
+        bool more = integrator (positions, anchors);
+        more |= PerformIntegration (positions, anchors, remaining...);
+        return more;
+    }
+
+    template <typename... Integrator>
+    bool Integrate (wobbly::BezierMesh::MeshArray         &positions,
+                    wobbly::BezierMesh::AnchorArray const &anchors,
+                    unsigned int                          steps,
+                    Integrator&&                          ...integrators)
+    {
+        bool more = false;
+
+        /* Force is actually going to be something that changes over time
+         * depending on how far about the objects are away from each other.
+         *
+         * Unfortunately that's not a simple thing to model. It requires us to
+         * provide an integration of the force function which is in turn
+         * dependent on the position of the objects which are in turn dependent
+         * on the force applied. That requires implicit integration, which is
+         * quite not dynamic.
+         *
+         * Its far easier to simply just approximate this by sampling the
+         * integration function. The problem that you end up facing then is that
+         * for large enough stepsizes (where stepsize > 2 * friction/ k) then
+         * you end up with model instability.
+         *
+         * Having one step every frame is a good approximation although that
+         * might need to change in the future */
+        while (steps--)
+            more |= PerformIntegration (positions, anchors, integrators...);
+
+        return more;
+    }
+}
+
+wobbly::Point
+wobbly::NewModel::Private::TargetPosition () const
+{
+    /* Make our own copies of the integrators and run the integration on them */
+    auto positions (mPositions.PointArray ());
+    auto anchors (mAnchors);
+    auto spring (mSpring);
+    auto constrainment (mConstrainment);
+
+    /* Keep on integrating this copy until we know the final position */
+    while (Integrate (positions, anchors, 1, spring, constrainment));
+
+    /* Model will be settled, return the top left point */
+    wobbly::Point result;
+    bg::assign_point (result, wobbly::PointView <double> (positions, 0));
+
+    return result;
+}
+
+namespace
+{
+    size_t
+    ClosestIndexToAbsolutePosition (size_t                        count,
+                                    wobbly::BezierMesh::MeshArray &points,
+                                    wobbly::Point                 const &pos)
+    {
+        boost::optional <size_t> nearestIndex;
+        float distance = std::numeric_limits <float>::max ();
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            wobbly::PointView <double> view (points, i);
+            float objectDistance = std::fabs (PointDistanceScalar (pos, view));
+            if (objectDistance < distance)
+            {
+                nearestIndex = i;
+                distance = objectDistance;
+            }
+        }
+
+        assert (nearestIndex.is_initialized ());
+        return nearestIndex.get ();
+    }
+}
+
+wobbly::AnchorGrab
+wobbly::NewModel::GrabAnchor (Point const &position)
+{
+    auto &points = priv->mPositions.PointArray ();
+    size_t count = ObjectCountForGridSize (BezierMesh::Width,
+                                           BezierMesh::Height);
+    size_t index = ClosestIndexToAbsolutePosition (count,
+                                                   points,
+                                                   position);
+
+    /* Bets are off once we've grabbed an anchor, the model is now unequal */
+    priv->mCurrentlyUnequal = true;
+
+    /* Set up grab notification */
+    return AnchorGrab (wobbly::PointView <double> (points, index),
+                       priv->mAnchors[index]);
+}
+
+void
+wobbly::NewModel::MoveModelBy (Point const &delta)
+{
+    auto &points (priv->mPositions.PointArray ());
+    size_t count = ObjectCountForGridSize (BezierMesh::Width,
+                                           BezierMesh::Height);
+    for (size_t i = 0; i < count; ++i)
+    {
+        PointView <double> pv (points, i);
+        bg::add_point (pv, delta);
+    }
+}
+
+void
+wobbly::NewModel::MoveModelTo (Point const &point)
+{
+    /* We need to calculate the target position for the
+     * top left corner. If we do that, then moving the model
+     * relative to that will ensure that it settles in the
+     * place that we expect. */
+
+    auto const &target (priv->TargetPosition ());
+
+    Vector delta (point);
+    bg::subtract_point (delta, target);
+
+    MoveModelBy (delta);
+}
+
+void
+wobbly::NewModel::ResizeModel (double width, double height)
+{
+    /* First, zero or negative widths are invalid */
+    assert (width > 0.0f);
+    assert (height > 0.0f);
+
+    /* Second, work out the scale factors */
+    double const scaleFactorX = width / priv->mWidth;
+    double const scaleFactorY = height / priv->mHeight;
+
+    wobbly::Vector const scaleFactor (scaleFactorX, scaleFactorY);
+
+    if (bg::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
+        return;
+
+    wobbly::Point const modelTargetOrigin (priv->TargetPosition ());
+
+    /* Then on each point, implement a transformation
+     * for non-anchors that scales the distance between
+     * points in model space */
+    auto &points (priv->mPositions.PointArray ());
+    size_t count = ObjectCountForGridSize (BezierMesh::Width,
+                                           BezierMesh::Height);
+    for (size_t i = 0; i < count; ++i)
+    {
+        wobbly::PointView <double> p (points, i);
+        bg::subtract_point (p, modelTargetOrigin);
+        bg::multiply_point (p, scaleFactor);
+        bg::add_point (p, modelTargetOrigin);
+    }
+
+    /* On each spring, apply the scale factor */
+    priv->mSpring.scale (scaleFactorX, scaleFactorY);
+
+    /* Apply width and height changes */
+    priv->mWidth = width;
+    priv->mHeight = height;
 }
 
 namespace wobbly
@@ -560,25 +1024,6 @@ namespace wobbly
             double mWidth, mHeight;
             bool mCurrentlyUnequal;
     };
-
-    void CalculatePositionArray (wobbly::Point           const &initialPosition,
-                                 wobbly::BezierMesh::MeshArray &array,
-                                 size_t const                  objectsSize,
-                                 double const                  tileWidth,
-                                 double const                  tileHeight)
-    {
-        for (size_t i = 0; i < objectsSize; ++i)
-        {
-            size_t const row = i / BezierMesh::Width;
-            size_t const column = i % BezierMesh::Width;
-
-            PointView <double> position (array, i);
-            bg::assign (position, initialPosition);
-            bg::add_point (position,
-                           Point (column * tileWidth,
-                                  row * tileHeight));
-        }
-    }
 }
 
 wobbly::Model::Private::Private (Point const &initialPosition,
@@ -737,6 +1182,7 @@ namespace
     }
 }
 
+/* XXX: Nuke */
 void
 wobbly::Model::TransformClosestObjectToPosition (TransformFunc const &func,
                                                  Point const         &point)
@@ -962,6 +1408,163 @@ wobbly::Model::Private::TargetPosition () const
     return Extremes ()[0];
 }
 
+wobbly::ConstrainmentStep::ConstrainmentStep (double const &threshold,
+                                              double const &width,
+                                              double const &height) :
+    threshold (threshold),
+    mWidth (width),
+    mHeight (height)
+{
+    targetBuffer.fill (0);
+}
+
+bool
+wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
+                                        BezierMesh::AnchorArray const &anchors)
+{
+    bool ret = false;
+    /* If an anchor is grabbed, then the model will be considered constrained.
+     * The first anchor taking priority - we work out the allowable range for
+     * each spring and then apply correction as appropriate before even
+     * starting to integrate the model
+     *
+     * FIXME: This prefers topleftmost anchors.
+     */
+    auto firstAnchor = std::find_if (anchors.begin (), anchors.end (),
+                                     [](unsigned int const &count) -> bool {
+                                         return count > 0;
+                                     });
+    if (firstAnchor != anchors.end ())
+    {
+        double const tileWidth = mWidth / (BezierMesh::Width - 1);
+        double const tileHeight = mHeight / (BezierMesh::Height - 1);
+        size_t const objectsSize = ObjectCountForGridSize (BezierMesh::Width,
+                                                           BezierMesh::Height);
+        auto const index = std::distance (anchors.begin (), firstAnchor);
+
+        wobbly::Point start;
+        bg::assign_point (start, PointView <double> (points, index));
+        bg::subtract_point (start,
+                            wobbly::Point (tileWidth *
+                                               (index % BezierMesh::Width),
+                                           tileHeight *
+                                               (index / BezierMesh::Width)));
+
+        /* Maybe keep these buffers on the objects so that we at least
+         * have some thread safety without having to reallocate all the time */
+        targetBuffer.fill (0.0);
+        CalculatePositionArray (start,
+                                targetBuffer,
+                                objectsSize,
+                                tileWidth,
+                                tileHeight);
+
+        /* In each position in the main position array we'll work out the
+         * pythagorean delta between the ideal positon and current one.
+         * If it is outside the maximum range, then we'll shrink the delta
+         * and reapply it */
+        double const maximumRange = threshold;
+
+        for (size_t i = 0; i < objectsSize; ++i)
+        {
+            wobbly::PointView <double> point (points, i);
+            wobbly::PointView <double> target (targetBuffer, i);
+
+            wobbly::Point delta;
+            bg::assign_point (delta, target);
+            bg::subtract_point (delta, point);
+
+            double range = std::sqrt (std::pow (bg::get <0> (delta), 2) +
+                                      std::pow (bg::get <1> (delta), 2));
+
+            if (range < maximumRange)
+                continue;
+
+            ret |= true;
+
+            double sine = bg::get <1> (delta) / range;
+            double cosine = bg::get <0> (delta) / range;
+
+            /* Now we want to reduce range and find our new x and y offsets */
+            range = std::min (maximumRange, range);
+
+            wobbly::Point newDelta (range * cosine, range * sine);
+            bg::assign_point (point, target);
+            bg::subtract_point (point, newDelta);
+        }
+    }
+
+    return ret;
+}
+
+wobbly::EulerIntegration::EulerIntegration ()
+{
+    velocities.fill (0.0);
+}
+
+bool
+wobbly::EulerIntegration::operator () (BezierMesh::MeshArray         &positions,
+                                       BezierMesh::MeshArray   const &forces,
+                                       BezierMesh::AnchorArray const &anchors,
+                                       double                        friction)
+{
+    bool more = false;
+    size_t const objectsSize = ObjectCountForGridSize (BezierMesh::Width,
+                                                       BezierMesh::Height);
+
+    for (size_t i = 0; i < objectsSize; ++i)
+    {
+        if (anchors[i] > 0)
+        {
+            wobbly::PointView <double> velocity (velocities, i);
+            bg::assign_value (velocity, 0);
+            continue;
+        }
+
+        more |= EulerIntegrateN (1.0, friction, wobbly::Object::Mass,
+                                wobbly::PointView <double> (positions, i),
+                                wobbly::PointView <double> (velocities, i),
+                                wobbly::PointView <double const> (forces, i));
+    }
+
+    return more;
+}
+
+bool
+wobbly::NewModel::StepModel (unsigned int time)
+{
+    bool moreStepsRequired = priv->mCurrentlyUnequal;
+
+    double const FPStepResolution = StepResolution;
+    unsigned int steps =
+        static_cast <unsigned int> (std::ceil (time / FPStepResolution));
+
+    /* We might not need more steps - set to false initially and then
+     * integrate the model to see if we do */
+    if (time)
+        moreStepsRequired = false;
+
+    moreStepsRequired |= Integrate (priv->mPositions.PointArray (),
+                                    priv->mAnchors,
+                                    steps,
+                                    priv->mConstrainment,
+                                    priv->mSpring);
+    priv->mCurrentlyUnequal = moreStepsRequired;
+    return priv->mCurrentlyUnequal;
+}
+
+wobbly::Point
+wobbly::NewModel::DeformTexcoords (Point const &normalized) const
+{
+    return priv->mPositions.DeformUnitCoordsToMeshSpace (normalized);
+}
+
+std::array <wobbly::Point, 4> const
+wobbly::NewModel::Extremes () const
+{
+    return priv->mPositions.Extremes ();
+}
+
 bool
 wobbly::Model::StepModel (unsigned int time)
 {
@@ -1094,16 +1697,9 @@ wobbly::Model::Extremes () const
 
 namespace wobbly
 {
-    class BezierMesh::Private
-    {
-        public:
-
-            BezierMesh::MeshArray mPoints;
-    };
 }
 
-wobbly::BezierMesh::BezierMesh () :
-    priv (new Private ())
+wobbly::BezierMesh::BezierMesh ()
 {
 }
 
@@ -1156,7 +1752,7 @@ wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
     double x = 0.0;
     double y = 0.0;
 
-    BezierMesh::MeshArray const &points (priv->mPoints);
+    BezierMesh::MeshArray const &points (mPoints);
 
     /* This will access the point matrix in a linear fashion for
      * cache-efficiency */
@@ -1243,8 +1839,8 @@ wobbly::BezierMesh::Extremes () const
 
     for (size_t i = 0; i < Width * Height * 2; i += 2)
     {
-        double const x = priv->mPoints[i];
-        double const y = priv->mPoints[i + 1];
+        double const x = mPoints[i];
+        double const y = mPoints[i + 1];
 
         SetToExtreme (topLeft, x, min, y, min);
         SetToExtreme (topRight, x, max, y, min);
@@ -1268,7 +1864,7 @@ namespace
 wobbly::PointView <double>
 wobbly::BezierMesh::PointForIndex (size_t x, size_t y)
 {
-    return wobbly::PointView <double> (priv->mPoints,
+    return wobbly::PointView <double> (mPoints,
                                        CoordIndex (x, y,
                                                    BezierMesh::Width));
 }
@@ -1276,19 +1872,19 @@ wobbly::BezierMesh::PointForIndex (size_t x, size_t y)
 wobbly::PointView <double const>
 wobbly::BezierMesh::PointForIndex (size_t x, size_t y) const
 {
-    return wobbly::PointView <double const> (priv->mPoints,
+    return wobbly::PointView <double const> (mPoints,
                                              CoordIndex (x, y,
                                                          BezierMesh::Width));
 }
 
-std::array <double, wobbly::BezierMesh::TotalIndices> &
+wobbly::BezierMesh::MeshArray &
 wobbly::BezierMesh::PointArray ()
 {
-    return priv->mPoints;
+    return mPoints;
 }
 
-std::array <double, wobbly::BezierMesh::TotalIndices> const &
+wobbly::BezierMesh::MeshArray const &
 wobbly::BezierMesh::PointArray () const
 {
-    return priv->mPoints;
+    return mPoints;
 }
