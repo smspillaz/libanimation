@@ -9,10 +9,15 @@
 #include <iostream>
 #include <gmock/gmock.h>
 #include <boost/geometry/algorithms/assign.hpp>
+#include <boost/geometry/algorithms/for_each.hpp>
+#include <boost/geometry/algorithms/within.hpp>
+#include <boost/geometry/geometries/box.hpp>
+#include <boost/geometry/geometries/polygon.hpp>
 
 #include <mathematical_model_matcher.h>
 
 #include <smspillaz/wobbly/wobbly.h>
+#include <wobbly_internal.h>
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -20,12 +25,15 @@ using ::testing::ElementsAreArray;
 using ::testing::Eq;
 using ::testing::Invoke;
 using ::testing::MakeMatcher;
+using ::testing::MakePolymorphicMatcher;
 using ::testing::Matcher;
 using ::testing::MatcherCast;
 using ::testing::MatcherInterface;
 using ::testing::MatchResultListener;
 using ::testing::Not;
+using ::testing::PolymorphicMatcher;
 using ::testing::Test;
+using ::testing::Types;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
@@ -129,230 +137,6 @@ namespace
             wobbly::PointView <double> force;
     };
 
-    class LockedObject :
-        public ::testing::Test
-    {
-        public:
-
-            wobbly::Point const Position = wobbly::Point (100, 50);
-
-            LockedObject () :
-                view (storage),
-                object (storage.Position (),
-                        storage.Velocity (),
-                        storage.Force (),
-                        wobbly::Point (0, 0)),
-                grab (new wobbly::Object::AnchorGrab (object.Grab ()))
-            {
-                bg::assign_point (view.position, Position);
-            }
-
-        protected:
-
-            SingleObjectStorage storage;
-            SingleObjectStorageView view;
-            wobbly::Object object;
-            std::unique_ptr <wobbly::Object::AnchorGrab> grab;
-    };
-
-    TEST_F (LockedObject, VelocityResetOnStep)
-    {
-        bg::assign_point (view.velocity, wobbly::Vector (1, 1));
-        object.Step (10);
-
-        EXPECT_THAT (view.velocity,
-                     GeometricallyEqual (wobbly::Vector (0, 0)));
-    }
-
-    TEST_F (LockedObject, VelocityAffectedAfterUnlocked)
-    {
-        wobbly::Vector initialVelocity (1, 1);
-        bg::assign_point (view.velocity, initialVelocity);
-        grab.reset ();
-        object.Step (1);
-
-        EXPECT_THAT (view.velocity,
-                     Not (GeometricallyEqual (initialVelocity)));
-    }
-
-    /* TODO: I'd like to be able to test here whether or not
-     * the velocity function with friction applied has a derivative
-     * with a lower slope than the velocity function without friction
-     * applied */
-    TEST (Object, FrictionVelocityAppliedToPoint)
-    {
-        std::function <double (int)> horizontalVelocityFunction =
-            [](int timestep) -> double {
-                SingleObjectStorage storage;
-                SingleObjectStorageView view (storage);
-
-                bg::assign_point (view.position, wobbly::Point (1, 1));
-                bg::assign_point (view.velocity, wobbly::Point (1, 0));
-
-                wobbly::Object object (storage.Position (),
-                                       storage.Velocity (),
-                                       storage.Force (),
-                                       wobbly::Point (1, 1));
-                object.Step (timestep);
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (horizontalVelocityFunction,
-                     SatisfiesModel (Parabolic <double> ()));
-    }
-
-    TEST (Object, MoveConstructorNoThrow)
-    {
-        SingleObjectStorage storage;
-        wobbly::Object a (storage.Position (),
-                          storage.Velocity (),
-                          storage.Force (),
-                          wobbly::Point (1, 1));
-        EXPECT_NO_THROW ({
-            wobbly::Object b (std::move (a));
-        });
-    }
-
-    class FrictionlessObject :
-        public Test
-    {
-        protected:
-
-            FrictionlessObject () :
-                view (storage),
-                object (storage.Position (),
-                        storage.Velocity (),
-                        storage.Force (),
-                        wobbly::Point (1, 1)),
-                mOldFriction (wobbly::Object::Friction)
-            {
-                wobbly::Object::Friction = 0.0f;
-            }
-
-            ~FrictionlessObject ()
-            {
-                wobbly::Object::Friction = mOldFriction;
-            }
-
-        public:
-
-            SingleObjectStorage     storage;
-            SingleObjectStorageView view;
-            wobbly::Object          object;
-
-        private:
-
-            float mOldFriction;
-    };
-
-    TEST_F (FrictionlessObject, StepFunctionReturnsTrueIfVelocityRemaining)
-    {
-        bg::assign (view.velocity, wobbly::Vector (5, 0));
-
-        /* Should always return true as a frictionless object can never
-         * have its velocity slowed (except by applying external force,
-         * which we don't do here) */
-        EXPECT_TRUE (object.Step (1));
-    }
-
-    TEST_F (FrictionlessObject, StepFunctionReturnsFalseIfNoVelocity)
-    {
-        bg::assign (view.velocity, wobbly::Vector (0, 0));
-
-        EXPECT_FALSE (object.Step (1));
-    }
-
-    TEST_F (FrictionlessObject, VelocityIncreasesLinearlyWithConstantForce)
-    {
-        std::function <double (int)> frictionlessHorizontalVelocityFunction =
-            [this](int timestep) -> double {
-                /* Reset velocity and force */
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
-
-                object.Step (timestep);
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (frictionlessHorizontalVelocityFunction,
-                     SatisfiesModel (Linear <double> ()));
-    }
-
-    TEST_F (FrictionlessObject, ObjectPositionChangesParabolically)
-    {
-        std::function <double (int)> frictionlessHorizontalPositionFunction =
-            [this](int timestep) -> double {
-                /* Reset velocity and force */
-                bg::assign (view.position, wobbly::Point (0, 0));
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
-
-                object.Step (timestep);
-
-                return bg::get <0> (view.position);
-            };
-
-        EXPECT_THAT (frictionlessHorizontalPositionFunction,
-                     SatisfiesModel (Parabolic <double> ()));
-    }
-
-    /* XXX: Maybe move this out of the FrictionlessObject fixture,
-     * or rename it */
-    TEST_F (FrictionlessObject, RelationshipBetweenFrictionAndVelocityIsLinear)
-    {
-        unsigned int nSamples = 10;
-        int          range = std::pow (2, nSamples);
-
-        std::function <double (int)> frictionToVelocityFunction =
-            [this, range](int frictionAmount) -> double {
-                /* Reset velocity and force */
-                bg::assign (view.position, wobbly::Point (0, 0));
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
-
-                float frictionProportion =
-                    frictionAmount / static_cast <float> (range);
-
-                /* Step once, but with different frictions, linearly
-                 * interpolate between frictionAmount and nSamples
-                 * and scale by the default friction value to get
-                 * our samples */
-                object.Step (16,
-                             frictionProportion * wobbly::Object::Friction,
-                             wobbly::Object::Mass);
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (frictionToVelocityFunction,
-                     SatisfiesModel (Linear <double> (),
-                                     WithSamples (nSamples)));
-    }
-
-    /* XXX: Test the relationship between mass and velocity - its hyperbolic,
-     * but we don't yet have a matcher for that.
-     *
-
-    TEST (Object, ForceResetAfterStep)
-    {
-        SingleObjectStorage storage;
-        SingleObjectStorageView view (storage);
-
-        bg::assign (view.force, wobbly::Vector (1, 1));
-
-        wobbly::Object object (storage.Position (),
-                               storage.Velocity (),
-                               storage.Force (),
-                               storage.Ratio ());
-
-        object.Step (1);
-
-        EXPECT_THAT (view.force,
-                     GeometricallyEqual (wobbly::Vector (0, 0)));
-    } */
-
     constexpr double FirstPositionX = 50.0f;
     constexpr double FirstPositionY = 50.0f;
 
@@ -383,14 +167,6 @@ namespace
             Springs ():
                 desiredDistance (SecondPositionX - FirstPositionX,
                                  SecondPositionY - FirstPositionY),
-                firstObject (firstStorage.Position (),
-                             firstStorage.Velocity (),
-                             firstStorage.Force (),
-                             wobbly::Point (0, 0)),
-                secondObject (secondStorage.Position (),
-                              secondStorage.Velocity (),
-                              secondStorage.Force (),
-                              wobbly::Point (0, 1)),
                 first (firstStorage),
                 second (secondStorage),
                 spring (firstStorage.Force (),
@@ -418,8 +194,6 @@ namespace
 
         protected:
 
-            wobbly::Object firstObject;
-            wobbly::Object secondObject;
             SingleObjectStorageView first;
             SingleObjectStorageView second;
             wobbly::Spring spring;
@@ -427,27 +201,14 @@ namespace
 
     TEST_F (Springs, NoForceAppliedWhenNoDeltaFromDesired)
     {
-        spring.applyForces (SpringConstant);
+        spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force,
                      GeometricallyEqual (wobbly::Vector (0, 0)));
         EXPECT_THAT (second.force,
                      GeometricallyEqual (wobbly::Vector (0, 0)));
     }
-/*
-    TEST_F (Springs, ForcesNotAppliedToAnchorObjects)
-    {
-        bg::assign (first.position,
-                    wobbly::Vector (FirstPositionX - 10.0f,
-                                    FirstPositionY - 10.0f));
-        wobbly::Object::AnchorGrab grab (firstObject.Grab ());
 
-        spring.applyForces (SpringConstant);
-
-        EXPECT_THAT (first.force,
-                     GeometricallyEqual (wobbly::Vector (0, 0)));
-    }
-*/
     template <typename Position>
     wobbly::Vector
     ForceForSpring (Position      const &first,
@@ -473,7 +234,7 @@ namespace
                                                       second.position,
                                                       desiredDistance));
 
-        spring.applyForces (SpringConstant);
+        spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force, GeometricallyEqual (expectedForce));
     }
@@ -489,7 +250,7 @@ namespace
                                                       first.position,
                                                       negativeDistance));
 
-        spring.applyForces (SpringConstant);
+        spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (second.force, GeometricallyEqual (expectedForce));
     }
@@ -508,7 +269,7 @@ namespace
         bg::multiply_value (expectedForce, nApplications);
 
         for (unsigned int i = 0; i < nApplications; ++i)
-            spring.applyForces (SpringConstant);
+            spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force, GeometricallyEqual (expectedForce));
     }
@@ -526,7 +287,7 @@ namespace
                             wobbly::Vector (SecondPositionX + delta,
                                             SecondPositionY));
 
-                spring.applyForces (SpringConstant);
+                spring.ApplyForces (SpringConstant);
 
                 return bg::get <0> (first.force);
             };
@@ -542,7 +303,7 @@ namespace
 
         bg::assign (first.position,
                     wobbly::Vector (justBelowThreshold, FirstPositionY));
-        spring.applyForces (SpringConstant);
+        spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force, GeometricallyEqual (wobbly::Vector (0, 0)));
     }
@@ -555,22 +316,22 @@ namespace
         bg::assign (first.position, wobbly::Vector (FirstPositionX - 10,
                                                     FirstPositionY));
 
-        EXPECT_TRUE (spring.applyForces (SpringConstant));
+        EXPECT_TRUE (spring.ApplyForces (SpringConstant));
     }
 
     TEST_F (Springs, ApplyForcesReturnsFalseIfNoForceRemaining)
     {
         /* Where there is no delta, there is no force */
-        EXPECT_FALSE (spring.applyForces (0.0f));
+        EXPECT_FALSE (spring.ApplyForces (0.0f));
     }
 
-    float const SpringScaleFactor = 2.0f;
+    double const SpringScaleFactor = 2.0f;
 
     TEST_F (Springs, ForceExistsAfterLengthScaled)
     {
-        spring.scaleLength (wobbly::Vector (SpringScaleFactor,
+        spring.ScaleLength (wobbly::Vector (SpringScaleFactor,
                                             SpringScaleFactor));
-        EXPECT_TRUE (spring.applyForces (SpringConstant));
+        EXPECT_TRUE (spring.ApplyForces (SpringConstant));
     }
 
     TEST_F (Springs, NoForceAfterLengthScaledAndObjectsMoved)
@@ -584,13 +345,13 @@ namespace
         bg::multiply_value (distance, SpringScaleFactor);
         bg::add_point (second.position, distance);
 
-        spring.scaleLength (wobbly::Vector (SpringScaleFactor,
+        spring.ScaleLength (wobbly::Vector (SpringScaleFactor,
                                             SpringScaleFactor));
-        EXPECT_FALSE (spring.applyForces (SpringConstant));
+        EXPECT_FALSE (spring.ApplyForces (SpringConstant));
     }
 
-    constexpr float TextureWidth = 50.0f;
-    constexpr float TextureHeight = 100.0f;
+    constexpr double TextureWidth = 50.0f;
+    constexpr double TextureHeight = 100.0f;
     wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
                                                        TextureHeight / 2);
 
@@ -608,7 +369,7 @@ namespace
 
         protected:
 
-            wobbly::NewModel model;
+            wobbly::Model model;
     };
 
     class PointCeilingOperation
@@ -628,13 +389,13 @@ namespace
         bg::for_each_coordinate (p, PointCeilingOperation ());
     }
 
-    void MoveModelASmallAmount (wobbly::NewModel &model)
+    void MoveModelASmallAmount (wobbly::Model &model)
     {
         model.MoveModelTo (wobbly::Vector (1, 1));
-        model.StepModel (1);
+        model.Step (1);
     }
 
-    wobbly::Point GetTruncatedDeformedCenter (wobbly::NewModel const &model)
+    wobbly::Point GetTruncatedDeformedCenter (wobbly::Model const &model)
     {
         auto center (wobbly::Point (0.5, 0.5));
         auto point (model.DeformTexcoords (center));
@@ -721,104 +482,63 @@ namespace
                      Not (GeometricallyEqual (TextureCenter)));
     }
 
-    /* FIXME: Test looking up the correct index */
-     #if 0
-    /* Observe by looking at index of transformed position ? */
-    TEST_F (SpringBezierModel, TransformsCorrectPositionCoord)
+    typedef std::tuple <wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
+
+    class SpringBezierModelGrabs :
+        public SpringBezierModel,
+        public WithParamInterface <SpringGrabParams>
     {
-        /* This is somewhat difficult to observe. The best thing we can do
-         * is grab the closest object, move it to a known position, and then
-         * transform the closest object at that position and check if the
-         * position co-ordinate matches exactly with the passed in position */
-        auto grab (model.GrabAnchor (wobbly::Point (0, 0)));
-        wobbly::Point objectPosition (-10, -10);
+        public:
 
-        /* The point starts at the origin, so this makes any absolute movement
-         * an effective delta movement */
-        grab.MoveBy (objectPosition);
-
-        auto transformationVerification =
-            [&objectPosition](wobbly::PointView <double> &position,
-                              wobbly::PointView <double> &velocity,
-                              wobbly::PointView <double> &force) -> void
+            SpringBezierModelGrabs () :
+                grabPosition (std::get <0> (GetParam ())),
+                movement (std::get <1> (GetParam ())),
+                extremeIndex (std::get <2> (GetParam ()))
             {
-                EXPECT_THAT (position, GeometricallyEqual (objectPosition));
-            };
+            }
 
-        model.TransformClosestObjectToPosition (transformationVerification,
-                                                objectPosition);
-    }
-    #endif
+            wobbly::Point const &grabPosition;
+            wobbly::Point const &movement;
+            size_t              extremeIndex;
+    };
 
-    float const ModelScaleFactorX = 2.0f;
-    float const ModelScaleFactorY = 3.0f;
-
-    float const TextureWidthAfterResize = ModelScaleFactorX * TextureWidth;
-    float const TextureHeightAfterResize = ModelScaleFactorY * TextureHeight;
-
-    #if 0
-    /* Probably remove these two tests */
-    TEST_F (SpringBezierModel, ForcesConstantAfterResize)
+    TEST_P (SpringBezierModelGrabs, GrabsCorrectIndex)
     {
-        wobbly::Vector addedForce (1.0f, 1.0f);
-        wobbly::Point  objectPosition (0.0f, 0.0f);
-        auto transformation =
-            [&addedForce](wobbly::PointView <double> &position,
-                          wobbly::PointView <double> &velocity,
-                          wobbly::PointView <double> &force) -> void
-            {
-                bg::add_point (force, addedForce);
-            };
+        wobbly::Anchor grab (model.GrabAnchor (grabPosition));
+        grab.MoveBy (movement);
 
-        model.TransformClosestObjectToPosition (transformation,
-                                                objectPosition);
+        wobbly::Point transformed (grabPosition);
+        bg::add_point (transformed, movement);
 
-        model.ResizeModel (TextureWidthAfterResize,
-                           TextureHeightAfterResize);
-
-        auto verification =
-            [&addedForce](wobbly::PointView <double> &position,
-                          wobbly::PointView <double> &velocity,
-                          wobbly::PointView <double> &force) -> void
-            {
-                EXPECT_THAT (force,
-                             GeometricallyEqual (addedForce));
-            };
-
-        model.TransformClosestObjectToPosition (verification,
-                                                objectPosition);
+        EXPECT_THAT (model.Extremes ()[extremeIndex],
+                     GeometricallyEqual (transformed));
     }
 
-    TEST_F (SpringBezierModel, VelocitiesConstantAfterResize)
+    SpringGrabParams const springGrabParams[] =
     {
-        wobbly::Vector addedVel (1.0f, 1.0f);
-        wobbly::Point  objectPosition (0.0f, 0.0f);
-        auto transformation =
-            [&addedVel](wobbly::PointView <double> &position,
-                        wobbly::PointView <double> &velocity,
-                        wobbly::PointView <double> &force) -> void
-            {
-                bg::add_point (velocity, addedVel);
-            };
+        SpringGrabParams (wobbly::Point (0.0, 0.0),
+                          wobbly::Point (-1.0, -1.0),
+                          0),
+        SpringGrabParams (wobbly::Point (TextureWidth, 0.0),
+                          wobbly::Point (1.0, -1.0),
+                          1),
+        SpringGrabParams (wobbly::Point (0.0, TextureHeight),
+                          wobbly::Point (-1.0, 1.0),
+                          2),
+        SpringGrabParams (wobbly::Point (TextureWidth, TextureHeight),
+                          wobbly::Point (1.0, 1.0),
+                          3)
+    };
 
-        model.TransformClosestObjectToPosition (transformation,
-                                                objectPosition);
+    INSTANTIATE_TEST_CASE_P (Extremes, SpringBezierModelGrabs,
+                             ValuesIn (springGrabParams));
+                             
 
-        model.ResizeModel (TextureWidthAfterResize,
-                           TextureHeightAfterResize);
+    double const ModelScaleFactorX = 2.0f;
+    double const ModelScaleFactorY = 3.0f;
 
-        auto verification =
-            [&addedVel](wobbly::PointView <double> &position,
-                        wobbly::PointView <double> &velocity,
-                        wobbly::PointView <double> &force) -> void
-            {
-                EXPECT_THAT (velocity,
-                             GeometricallyEqual (addedVel));
-            };
-        model.TransformClosestObjectToPosition (verification,
-                                                objectPosition);
-    }
-    #endif
+    double const TextureWidthAfterResize = ModelScaleFactorX * TextureWidth;
+    double const TextureHeightAfterResize = ModelScaleFactorY * TextureHeight;
 
     typedef Matcher <wobbly::Point const &> PointMatcher;
 
@@ -890,12 +610,12 @@ namespace
     {
         wobbly::Vector const grabPoint (TextureWidth,
                                         TextureHeight);
-        wobbly::AnchorGrab grab (model.GrabAnchor (grabPoint));
+        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
 
         model.ResizeModel (TextureWidthAfterResize,
                            TextureHeightAfterResize);
 
-        EXPECT_TRUE (model.StepModel (1));
+        EXPECT_TRUE (model.Step (1));
     }
 
     TEST_F (SpringBezierModel, NetForceIsZeroAfterResizingSettledModel)
@@ -903,7 +623,7 @@ namespace
         model.ResizeModel (TextureWidthAfterResize,
                            TextureHeightAfterResize);
 
-        EXPECT_FALSE (model.StepModel (1));
+        EXPECT_FALSE (model.Step (1));
     }
 
     TEST_F (SpringBezierModel, PositionIsTopLeftCornerAtSettled)
@@ -913,11 +633,81 @@ namespace
 
         /* We can assume that Extremes ()[0] is the top-left position as
          * the other tests enforce it being the minimum,minimum position */
-
         EXPECT_THAT (model.Extremes ()[0], GeometricallyEqual (position));
     }
 
-    TEST_F (SpringBezierModel, ModelMovementTakesIntoAccountTargetPos)
+    template <typename ParentGeometry>
+    class WithinGeometryMatcher
+    {
+        public:
+
+            WithinGeometryMatcher (ParentGeometry const &parent) :
+                parent (parent)
+            {
+            }
+
+            template <typename ChildGeometry>
+            bool MatchAndExplain (ChildGeometry const &child,
+                                  MatchResultListener *listener) const
+            {
+                return bg::within (child, parent);
+            }
+
+            void DescribeTo (std::ostream *os) const
+            {
+                *os << "is within :" << std::endl;
+                bg::model::polygon <wobbly::Point> poly;
+                bg::assign (poly, parent);
+                bg::for_each_point (poly, PrintPoint (*os));
+            }
+
+            void DescribeNegationTo (std::ostream *os) const
+            {
+                *os << "is not within :" << std::endl;
+                bg::model::polygon <wobbly::Point> poly;
+                bg::assign (poly, parent);
+                bg::for_each_point (poly, PrintPoint (*os));
+            }
+
+        private:
+
+            class PrintPoint
+            {
+                public:
+
+                    PrintPoint (std::ostream &os) :
+                        os (os)
+                    {
+                    }
+
+                    template <typename Point>
+                    void operator () (Point const &p)
+                    {
+                        os << " - " << p << std::endl;
+                    }
+
+                private:
+
+                   std::ostream &os;
+            };
+
+            ParentGeometry parent;
+    };
+
+    template <typename ParentGeometry>
+    inline PolymorphicMatcher <WithinGeometryMatcher <ParentGeometry> >
+    WithinGeometry (ParentGeometry const &parent)
+    {
+        WithinGeometryMatcher <ParentGeometry> matcher (parent);
+        return MakePolymorphicMatcher (matcher);
+    }
+
+    typedef bg::model::box <wobbly::Point> PointBox;
+
+    /* The only way we can test this is to perform operations dependent
+     * on a target position and ensure that they are precise to the grab's
+     * position */
+    TEST_F (SpringBezierModel, TargetPositionWithinRangeGrabbed)
     {
         /* Create an anchor on 0, 0 and then move it to 100, 100, then move
          * it back to 0, 0. The end result should be that the model position
@@ -925,28 +715,52 @@ namespace
          * so we need to do it this way */
 
         wobbly::Vector const grabPoint (0, 0);
-        wobbly::AnchorGrab grab (model.GrabAnchor (grabPoint));
+        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
 
         grab.MoveBy (wobbly::Point (100, 100));
         model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
-        while (model.StepModel (1));
+        while (model.Step (1));
 
         EXPECT_THAT (model.Extremes ()[0],
-                     GeometricallyEqual (wobbly::Point (0, 0)));
+                     WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
+                                               wobbly::Point (1.5, 1.5))));
     }
 
-    void GrabModelMoveAndStepASmallAmount (wobbly::NewModel &model)
+    TEST_F (SpringBezierModel, TargetPositionWithinRangeNotGrabbed)
+    {
+        /* This time integrate the model for a short period while grabbed
+         * and then move it to a new position. This should still cause its
+         * target position to end up roughly in the same place */
+        {
+            wobbly::Vector const grabPoint (0, 0);
+            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+
+            grab.MoveBy (wobbly::Point (100, 100));
+            model.Step (2);
+        }
+
+        model.MoveModelTo (wobbly::Point (0, 0));
+
+        /* Wait until the model has completely settled */
+        while (model.Step (1));
+
+        EXPECT_THAT (model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
+                                               wobbly::Point (1.5, 1.5))));
+    }
+
+    void GrabModelMoveAndStepASmallAmount (wobbly::Model &model)
     {
         wobbly::Vector const grabPoint (model.Extremes ()[3]);
-        wobbly::AnchorGrab anchor (model.GrabAnchor (grabPoint));
+        wobbly::Anchor anchor (model.GrabAnchor (grabPoint));
 
         anchor.MoveBy (wobbly::Point (100, 100));
 
-        /* Five steps is reasonable */
-        for (int i = 0; i < 5; ++i)
-            model.StepModel (16);
+        /* Twenty steps is reasonable */
+        for (int i = 0; i < 20; ++i)
+            model.Step (16);
     }
 
     TEST (SpringBezierModelSettings, ModelWithHigherSpringTakesFasterFirstStep)
@@ -960,28 +774,19 @@ namespace
          * top-left hand point also move a lot quicker
          */
 
-        wobbly::NewModel::Settings lowerSpringKSettings =
-        {
-            wobbly::Model::DefaultSpringConstant - 2.0f,
-            wobbly::Object::Friction,
-            wobbly::Model::DefaultObjectRange
-        };
+        wobbly::Model::Settings lowerK = wobbly::Model::DefaultSettings;
+        wobbly::Model::Settings higherK = wobbly::Model::DefaultSettings;
 
-        wobbly::NewModel::Settings higherSpringKSettings =
-        {
-            wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction,
-            wobbly::Model::DefaultObjectRange
-        };
+        lowerK.springConstant -= 2.0f;
 
-        wobbly::NewModel lowerSpringKModel (wobbly::Vector (0, 0),
-                                            TextureWidth,
-                                            TextureHeight,
-                                            lowerSpringKSettings);
-        wobbly::NewModel higherSpringKModel (wobbly::Vector (0, 0),
-                                             TextureWidth,
-                                             TextureHeight,
-                                             higherSpringKSettings);
+        wobbly::Model lowerSpringKModel (wobbly::Vector (0, 0),
+                                         TextureWidth,
+                                         TextureHeight,
+                                         lowerK);
+        wobbly::Model higherSpringKModel (wobbly::Vector (0, 0),
+                                          TextureWidth,
+                                          TextureHeight,
+                                          higherK);
 
         GrabModelMoveAndStepASmallAmount (lowerSpringKModel);
         GrabModelMoveAndStepASmallAmount (higherSpringKModel);
@@ -992,28 +797,19 @@ namespace
 
     TEST (SpringBezierModelSettings, ModelWithLowerFrictionTakesFasterFirstStep)
     {
-        wobbly::NewModel::Settings lowerFrictionSettings =
-        {
-            wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction,
-            wobbly::Model::DefaultObjectRange
-        };
+        wobbly::Model::Settings lowerF = wobbly::Model::DefaultSettings;
+        wobbly::Model::Settings higherF = wobbly::Model::DefaultSettings;
 
-        wobbly::NewModel::Settings higherFrictionSettings =
-        {
-            wobbly::Model::DefaultSpringConstant,
-            wobbly::Object::Friction + 2.0f,
-            wobbly::Model::DefaultObjectRange
-        };
+        lowerF.friction -= 2.0f;
 
-        wobbly::NewModel lowerFrictionModel (wobbly::Vector (0, 0),
-                                             TextureWidth,
-                                             TextureHeight,
-                                             lowerFrictionSettings);
-        wobbly::NewModel higherFrictionModel (wobbly::Vector (0, 0),
-                                              TextureWidth,
-                                              TextureHeight,
-                                              higherFrictionSettings);
+        wobbly::Model lowerFrictionModel (wobbly::Vector (0, 0),
+                                          TextureWidth,
+                                          TextureHeight,
+                                          lowerF);
+        wobbly::Model higherFrictionModel (wobbly::Vector (0, 0),
+                                           TextureWidth,
+                                           TextureHeight,
+                                           higherF);
 
         GrabModelMoveAndStepASmallAmount (lowerFrictionModel);
         GrabModelMoveAndStepASmallAmount (higherFrictionModel);
@@ -1024,132 +820,350 @@ namespace
 
     TEST_F (SpringBezierModel, StepZeroReturnsTrueOnGrabbingAndMovingAnchor)
     {
-        /* Create an anchor and move it. StepModel (0) should return true */
+        /* Create an anchor and move it. Step (0) should return true */
         wobbly::Vector const grabPoint (0, 0);
-        wobbly::AnchorGrab grab (model.GrabAnchor (grabPoint));
+        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
 
         grab.MoveBy (wobbly::Point (100, 100));
-        EXPECT_TRUE (model.StepModel (0));
+        EXPECT_TRUE (model.Step (0));
     }
 
     TEST_F (SpringBezierModel, StepZeroReturnsTrueOnNonEquallibriumModel)
     {
         {
-            /* Create an anchor and move it. StepModel (0) should return true */
+            /* Create an anchor and move it. Step (0) should return true */
             wobbly::Vector const grabPoint (0, 0);
-            wobbly::AnchorGrab grab (model.GrabAnchor (grabPoint));
+            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
 
             grab.MoveBy (wobbly::Point (100, 100));
 
             /* Step the model once, this will make the model unequal */
-            model.StepModel (1);
+            model.Step (1);
 
             /* Grab goes away here but the model is still unequal */
         }
 
-        EXPECT_TRUE (model.StepModel (0));
+        EXPECT_TRUE (model.Step (0));
     }
 
-    class FrictionlessSpringBezierModel :
-        public SpringBezierModel
+    class EulerIntegration :
+        public Test
     {
         public:
 
-            FrictionlessSpringBezierModel () :
-                mLastFriction (wobbly::Object::Friction)
+            EulerIntegration () :
+                view (storage)
             {
             }
 
-            ~FrictionlessSpringBezierModel ()
-            {
-                wobbly::Object::Friction = mLastFriction;
-            }
+            typedef wobbly::PointView <double const> DCPV;
 
-        private:
-
-            double mLastFriction;
+            SingleObjectStorage storage;
+            SingleObjectStorageView view;
     };
 
-    /* FIXME: Expose EulerIntegrate to test these two */
-    #if 0
-    /* Test through the integration functions themselves */
-    TEST_F (FrictionlessSpringBezierModel, ContinueStepWhenObjectsHaveVelocity)
+    TEST_F (EulerIntegration, ContinueStepWhenObjectsHaveVelocity)
     {
-        auto transformation = [](wobbly::PointView <double> &position,
-                                 wobbly::PointView <double> &velocity,
-                                 wobbly::PointView <double> &force) -> void
-        {
-            bg::add_point (velocity, wobbly::Point (10.0f, 0.0f));
-        };
+        bg::set <0> (view.velocity, 1.0);
 
-        model.TransformClosestObjectToPosition (transformation,
-                                                wobbly::Point (0, 0));
-        EXPECT_TRUE (model.StepModel (1));
+        /* Integrate without any friction */
+        EXPECT_TRUE (wobbly::EulerIntegrate (1,
+                                             0,
+                                             1,
+                                             std::move (view.position),
+                                             std::move (view.velocity),
+                                             DCPV (view.force)));
     }
 
-    TEST_F (FrictionlessSpringBezierModel, ContinueStepWhenObjectsHaveForce)
+    TEST_F (EulerIntegration, NoFurtherStepWhenObjectsHaveNoVelocity)
     {
-        /* Move a object by -50, -50, this will cause all objects to have
-         * force */
-        auto transformation = [](wobbly::PointView <double> &position,
-                                 wobbly::PointView <double> &velocity,
-                                 wobbly::PointView <double> &force) -> void
-        {
-            bg::subtract_point (position, wobbly::Point (50.0f, 50.0f));
-        };
+        bg::set <0> (view.velocity, 0.0);
 
-        model.TransformClosestObjectToPosition (transformation,
-                                                wobbly::Point (0, 0));
-        EXPECT_TRUE (model.StepModel (1));
+        /* Integrate without any friction */
+        EXPECT_FALSE (wobbly::EulerIntegrate (1,
+                                              0,
+                                              1,
+                                              std::move (view.position),
+                                              std::move (view.velocity),
+                                              DCPV (view.force)));
     }
-    #endif
 
-    class MockImmediatelyMovablePosition :
-        public wobbly::ImmediatelyMovablePosition
+    TEST_F (EulerIntegration, VelocityIsParabolicWithFriction)
+    {
+        std::function <double (int)> horizontalVelocityFunction =
+            [this](int timestep) -> double {
+                bg::assign_point (view.position, wobbly::Point (1, 1));
+                bg::assign_point (view.velocity, wobbly::Point (1, 0));
+
+                wobbly::EulerIntegrate (timestep,
+                                        1,
+                                        1,
+                                        std::move (view.position),
+                                        std::move (view.velocity),
+                                        DCPV (view.force));
+
+                return bg::get <0> (view.velocity);
+            };
+
+        EXPECT_THAT (horizontalVelocityFunction,
+                     SatisfiesModel (Parabolic <double> ()));
+    }
+
+    TEST_F (EulerIntegration, VelocityIncreasesLinearlyWithConstantForce)
+    {
+        std::function <double (int)> frictionlessHorizontalVelocityFunction =
+            [this](int timestep) -> double {
+                /* Reset velocity and force */
+                bg::assign (view.velocity, wobbly::Vector (0, 0));
+                bg::assign (view.force, wobbly::Vector (1.0f, 0));
+
+                wobbly::EulerIntegrate (timestep,
+                                        0,
+                                        1,
+                                        std::move (view.position),
+                                        std::move (view.velocity),
+                                        DCPV (view.force));
+
+                return bg::get <0> (view.velocity);
+            };
+
+        EXPECT_THAT (frictionlessHorizontalVelocityFunction,
+                     SatisfiesModel (Linear <double> ()));
+    }
+
+    TEST_F (EulerIntegration, LinearDecreaseInVelocityWithFriction)
+    {
+        unsigned int nSamples = 10;
+        int          range = std::pow (2, nSamples);
+
+        std::function <double (int)> frictionToVelocityFunction =
+            [this, range](int frictionAmount) -> double {
+                /* Reset velocity and force */
+                bg::assign (view.position, wobbly::Point (0, 0));
+                bg::assign (view.velocity, wobbly::Vector (0, 0));
+                bg::assign (view.force, wobbly::Vector (1.0f, 0));
+
+                double frictionProportion =
+                    frictionAmount / static_cast <double> (range);
+
+                /* Step once, but with different frictions, linearly
+                 * interpolate between frictionAmount and nSamples
+                 * and scale by the default friction value to get
+                 * our samples */
+                wobbly::EulerIntegrate (16,
+                                        frictionProportion,
+                                        1.0,
+                                        std::move (view.position),
+                                        std::move (view.velocity),
+                                        DCPV (view.force));
+
+                return bg::get <0> (view.velocity);
+            };
+
+        EXPECT_THAT (frictionToVelocityFunction,
+                     SatisfiesModel (Linear <double> (),
+                                     WithSamples (nSamples)));
+    }
+
+    struct MockIntegration
+    {
+        MockIntegration ()
+        {
+            EXPECT_CALL (*this, Reset (_)).Times (AtLeast (0));
+            EXPECT_CALL (*this, Step (_, _, _, _, _, _)).Times (AtLeast (0));
+        }
+
+        MOCK_METHOD1 (Reset, void (size_t));
+        MOCK_METHOD6 (Step, bool (size_t,
+                                  double,
+                                  double,
+                                  double,
+                                  wobbly::BezierMesh::MeshArray       &,
+                                  wobbly::BezierMesh::MeshArray const &));
+    };
+
+    class AnchoredIntegrationLoop :
+        public ::testing::Test
     {
         public:
 
-            MockImmediatelyMovablePosition (wobbly::Vector const &position) :
-                position (position)
+            AnchoredIntegrationLoop () :
+                integrator (strategy)
             {
-                EXPECT_CALL (*this, MoveByDelta (_)).Times (AtLeast (0));
-                EXPECT_CALL (*this, DeltaTo (_)).Times (AtLeast (0));
-                EXPECT_CALL (*this, Index ()).Times (AtLeast (0));
-                EXPECT_CALL (*this, Position ()).Times (AtLeast (0));
-
-                auto deltaToDelegate =
-                    &MockImmediatelyMovablePosition::DeltaToDelegate;
-
-                ON_CALL (*this, DeltaTo (_))
-                    .WillByDefault (Invoke (this, deltaToDelegate));
+                positions.fill (0);
+                forces.fill (0);
+                anchors.fill (0);
             }
 
-            MOCK_METHOD1 (MoveByDelta, void (wobbly::Vector const &));
-            MOCK_CONST_METHOD1 (DeltaTo,
-                                wobbly::Vector (wobbly::Vector const &));
-            MOCK_CONST_METHOD0 (Position,
-                                wobbly::PointView <double> const & ());
-            MOCK_CONST_METHOD0 (Index, wobbly::Point const & ());
+            MockIntegration strategy;
+            wobbly::AnchoredIntegrationLoop <MockIntegration> integrator;
 
-        private:
-
-            wobbly::Vector
-            DeltaToDelegate (wobbly::Vector const &v)
-            {
-                wobbly::Vector delta (v);
-                bg::subtract_point (delta, position);
-                return delta;
-            }
-
-            wobbly::Vector position;
+            wobbly::BezierMesh::MeshArray positions;
+            wobbly::BezierMesh::MeshArray forces;
+            wobbly::BezierMesh::AnchorArray anchors;
     };
 
-    float TileWidth (float width, unsigned int nHorizontalTiles)
+    TEST_F (AnchoredIntegrationLoop, ResetIndicesWithAnchor)
+    {
+        EXPECT_CALL (strategy, Reset (0)).Times (1);
+        ++anchors[0];
+
+        integrator (positions, forces, anchors, 0.0);
+    }
+
+    TEST_F (AnchoredIntegrationLoop, StepUnanchoredPoints)
+    {
+        EXPECT_CALL (strategy, Step (0, _, _, _, _, _)).Times (1);
+
+        integrator (positions, forces, anchors, 0.0);
+    }
+
+    template <typename Integrator>
+    class IntegrationStrategy :
+        public Test
+    {
+        public:
+
+            IntegrationStrategy ()
+            {
+                points.fill (0.0);
+                forces.fill (0.0);
+            }
+
+            Integrator integrator;
+            wobbly::BezierMesh::MeshArray points;
+            wobbly::BezierMesh::MeshArray forces;
+    };
+
+    typedef Types<wobbly::EulerIntegration> IntegrationStrategies;
+    TYPED_TEST_CASE (IntegrationStrategy, IntegrationStrategies);
+
+    TYPED_TEST (IntegrationStrategy, NoMotionOnReset)
+    {
+        /* Call the reset () function on the integrator. No changes
+         * should occurr on the position at that index */
+        wobbly::PointView <double> pointView (TestFixture::points, 0);
+
+        TestFixture::integrator.Reset (0);
+
+        EXPECT_THAT (pointView, GeometricallyEqual (wobbly::Point (0, 0)));
+    }
+
+    TYPED_TEST (IntegrationStrategy, EffectiveVelocityChangedToZeroOnReset)
+    {
+        /* Apply a force once to a frictionless object and integrate it.
+         * Call reset and integrate again without any force. The result is
+         * no change in position as the velocity was reset */
+        wobbly::PointView <double> forceView (TestFixture::forces, 0);
+        wobbly::PointView <double> pointView (TestFixture::points, 0);
+
+        /* First apply a force to an object and integrate */
+        bg::set <0> (forceView, 1.0);
+        TestFixture::integrator.Step (0,
+                                      1.0,
+                                      1.0,
+                                      1.0,
+                                      TestFixture::points,
+                                      TestFixture::forces);
+
+        wobbly::Point expectedPosition;
+        bg::assign_point (expectedPosition, pointView);
+
+        /* Remove force, reset and integrate again */
+        bg::set <0> (forceView, 0.0);
+        TestFixture::integrator.Reset (0);
+        TestFixture::integrator.Step (0,
+                                      1.0,
+                                      1.0,
+                                      1.0,
+                                      TestFixture::points,
+                                      TestFixture::forces);
+
+        /* After integration, the point should not have moved because
+         * it has no velocity */
+        EXPECT_THAT (pointView, GeometricallyEqual (expectedPosition));
+    }
+
+    TYPED_TEST (IntegrationStrategy, VelocityAffectedWithNewForcesAfterReset)
+    {
+        wobbly::PointView <double> forceView (TestFixture::forces, 0);
+        wobbly::PointView <double> pointView (TestFixture::points, 0);
+
+        wobbly::Point initialPosition;
+        bg::assign_point (initialPosition, pointView);
+
+        /* Reset, apply force and integrate */
+        bg::set <0> (forceView, 1.0);
+        TestFixture::integrator.Reset (0);
+        TestFixture::integrator.Step (0,
+                                      1.0,
+                                      1.0,
+                                      1.0,
+                                      TestFixture::points,
+                                      TestFixture::forces);
+
+        EXPECT_THAT (pointView,
+                     Not (GeometricallyEqual (initialPosition)));
+    }
+
+    TYPED_TEST (IntegrationStrategy, PositionChangesParabolicallyOverTime)
+    {
+        wobbly::PointView <double> forceView (TestFixture::forces, 0);
+        wobbly::PointView <double> pointView (TestFixture::points, 0);
+
+        std::function <double (int)> frictionlessHorizontalPositionFunction =
+            [this, &pointView, &forceView](int timestep) -> double {
+                TypeParam integrator;
+
+                /* Reset velocity and force */
+                bg::assign (pointView, wobbly::Point (0, 0));
+                bg::assign (forceView, wobbly::Vector (1.0f, 0));
+
+                integrator.Step (0,
+                                 timestep,
+                                 1.0,
+                                 1.0,
+                                 TestFixture::points,
+                                 TestFixture::forces);
+
+                return bg::get <0> (pointView);
+            };
+
+        EXPECT_THAT (frictionlessHorizontalPositionFunction,
+                     SatisfiesModel (Parabolic <double> ()));
+    }
+
+    TEST (SpringStep, ContinueStepWhenSpringsHaveForces)
+    {
+        /* All points will start at zero, so a positive spring force
+         * will already be exerted */
+        wobbly::BezierMesh::MeshArray positions;
+        wobbly::BezierMesh::AnchorArray anchors;
+        double const springConstant = 1.0;
+        double const springFriction = 1.0;
+        double const springWidth = 1.0;
+        double const springHeight = 1.0;
+
+        positions.fill (0.0);
+        anchors.fill (0);
+
+        MockIntegration                      integrator;
+        wobbly::SpringStep <MockIntegration> stepper (integrator,
+                                                      positions,
+                                                      springConstant,
+                                                      springFriction,
+                                                      springWidth,
+                                                      springHeight);
+
+        EXPECT_TRUE (stepper (positions, anchors));
+    }
+
+    double TileWidth (double width, unsigned int nHorizontalTiles)
     {
         return width / (nHorizontalTiles - 1);
     }
 
-    float TileHeight (float height, unsigned int nVerticalTiles)
+    double TileHeight (double height, unsigned int nVerticalTiles)
     {
         return height / (nVerticalTiles - 1);
     }
@@ -1171,7 +1185,7 @@ namespace
             typedef std::function <double (Point const &)> ResultFactory;
 
             virtual void SetUp ();
-            void InitializeWithDimensions (float width, float height);
+            void InitializeWithDimensions (double width, double height);
             void ApplyTransformation (MeshTransform const &);
 
             std::function <double (int)>
@@ -1187,10 +1201,10 @@ namespace
     }
 
     void
-    BezierMesh::InitializeWithDimensions (float width, float height)
+    BezierMesh::InitializeWithDimensions (double width, double height)
     {
-        float tileWidth = TileWidth (width, wobbly::BezierMesh::Width);
-        float tileHeight = TileHeight (height, wobbly::BezierMesh::Height);
+        double tileWidth = TileWidth (width, wobbly::BezierMesh::Width);
+        double tileHeight = TileHeight (height, wobbly::BezierMesh::Height);
 
         for (unsigned int i = 0; i < wobbly::BezierMesh::Height; ++i)
         {
@@ -1222,12 +1236,12 @@ namespace
                                          unsigned int             nSamples)
     {
         auto deformation =
-            [nSamples, &mesh, &result](int lookupValue) -> double {
+            [nSamples, &mesh, result](int lookupValue) -> double {
                 /* Divide by the total number of samples (2^10) in order to get
                  * the unit value. */
 
-                float const unitLookupValue =
-                    lookupValue / static_cast <float> (pow (2, nSamples));
+                double const unitLookupValue =
+                    lookupValue / static_cast <double> (pow (2, nSamples));
                 auto const lookup (wobbly::Point (unitLookupValue,
                                                   unitLookupValue));
                 auto p (mesh.DeformUnitCoordsToMeshSpace (lookup));
@@ -1251,8 +1265,8 @@ namespace
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
                                         return bg::get <0> (p);
                                      },
-            mesh,
-            nSamples);
+                                     mesh,
+                                     nSamples);
 
         EXPECT_THAT (horizontalDeformation,
                      SatisfiesModel (Linear <double> (),
@@ -1273,8 +1287,8 @@ namespace
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
                                         return bg::get <1> (p);
                                      },
-            mesh,
-            nSamples);
+                                     mesh,
+                                     nSamples);
 
         EXPECT_THAT (verticalDeformation,
                      SatisfiesModel (Linear <double> (),
