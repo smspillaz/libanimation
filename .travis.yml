@@ -25,22 +25,22 @@ before_install:
   - if [[ $COVERAGE == 1 ]] ; then sudo pip install cpp-coveralls; fi
 script:
   - if [[ $DEBIAN_BUILD == 1 ]] ; then
-      pushd ..;
-      tar -czvf libwobbly_0.1.orig.tar.gz libwobbly/;
-      popd;
+      pushd .. &&
+      tar -czvf libwobbly_0.1.orig.tar.gz libwobbly/ &&
+      popd &&
       debuild -i -us -uc -b;
     else
-      mkdir build;
-      pushd build;
-      export CC=${CC_OVERLOAD};
-      export CXX=${CXX_OVERLOAD};
+      mkdir build &&
+      pushd build &&
+      export CC=${CC_OVERLOAD} &&
+      export CXX=${CXX_OVERLOAD} &&
       if [[ $SCAN_BUILD == 1 ]] ; then
-        scan-build cmake .. `echo ${CMAKE_OPTIONS}`;
+        scan-build cmake .. `echo ${CMAKE_OPTIONS}` &&
         scan-build --use-cc=clang --use-c++=clang++ make;
       else
         cmake .. `echo ${CMAKE_OPTIONS}` && make;
-      fi;
-      ./tests/wobbly_unit_tests;
+      fi &&
+      ./tests/wobbly_unit_tests &&
       popd;
     fi
 
