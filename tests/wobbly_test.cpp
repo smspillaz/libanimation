@@ -1081,7 +1081,7 @@ namespace
             wobbly::BezierMesh::MeshArray forces;
     };
 
-    typedef Types<wobbly::EulerIntegration> IntegrationStrategies;
+    typedef Types <wobbly::EulerIntegration> IntegrationStrategies;
     TYPED_TEST_CASE (IntegrationStrategy, IntegrationStrategies);
 
     TYPED_TEST (IntegrationStrategy, NoMotionOnReset)

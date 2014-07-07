@@ -411,7 +411,7 @@ namespace
         wobbly::Point deltaToTopLeft (tileWidth *
                                           (index % wobbly::BezierMesh::Width),
                                       tileHeight *
-                                          (index / wobbly::BezierMesh::Width)); 
+                                          (index / wobbly::BezierMesh::Width));
         bg::subtract_point (start, deltaToTopLeft);
 
         return start;
@@ -431,13 +431,16 @@ wobbly::Model::Private::TargetPosition () const
      * the target position by reference to it */
     boost::optional <wobbly::Point> early;
     mAnchors.WithFirstGrabbed ([&early, &points, tileW, tileH] (size_t index) {
-        auto const anchor = wobbly::PointView <double> (points, index);
+                                    auto const anchor =
+                                        wobbly::PointView <double> (points,
+                                                                    index);
 
-        early = TopLeftPositionInSettledMesh (anchor,
-                                              index,
-                                              tileW,
-                                              tileH);
-    });
+                                    early =
+                                        TopLeftPositionInSettledMesh (anchor,
+                                                                      index,
+                                                                      tileW,
+                                                                      tileH);
+                               });
 
     if (early.is_initialized ())
         return early.get ();
@@ -598,57 +601,61 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
      * The first anchor taking priority - we work out the allowable range for
      * each spring and then apply correction as appropriate before even
      * starting to integrate the model
-     *
      */
-    anchors.WithFirstGrabbed ([this, &points, &ret](size_t index) {
-        double const tileWidth = mWidth / (BezierMesh::Width - 1);
-        double const tileHeight = mHeight / (BezierMesh::Height - 1);
-        auto const anchor = wobbly::PointView <double> (points, index);
+    auto const action =
+        [this, &points, &ret](size_t index) {
+            double const tileWidth = mWidth / (BezierMesh::Width - 1);
+            double const tileHeight = mHeight / (BezierMesh::Height - 1);
+            auto const anchor = wobbly::PointView <double> (points, index);
 
-        wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
-                                                           index,
-                                                           tileWidth,
-                                                           tileHeight));
+            wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
+                                                               index,
+                                                               tileWidth,
+                                                               tileHeight));
 
-        size_t const objectsSize = ObjectCountForGridSize (BezierMesh::Width,
-                                                           BezierMesh::Height);
+            size_t const objectsSize =
+                ObjectCountForGridSize (BezierMesh::Width,
+                                        BezierMesh::Height);
 
-        targetBuffer.fill (0.0);
-        CalculatePositionArray (start,
-                                targetBuffer,
-                                objectsSize,
-                                tileWidth,
-                                tileHeight);
+            targetBuffer.fill (0.0);
+            CalculatePositionArray (start,
+                                    targetBuffer,
+                                    objectsSize,
+                                    tileWidth,
+                                    tileHeight);
 
-        /* In each position in the main position array we'll work out the
-         * pythagorean delta between the ideal positon and current one.
-         * If it is outside the maximum range, then we'll shrink the delta
-         * and reapply it */
-        double const maximumRange = threshold;
+            /* In each position in the main position array we'll work out the
+             * pythagorean delta between the ideal positon and current one.
+             * If it is outside the maximum range, then we'll shrink the delta
+             * and reapply it */
+            double const maximumRange = threshold;
 
-        for (size_t i = 0; i < objectsSize; ++i)
-        {
-            wobbly::PointView <double> point (points, i);
-            wobbly::PointView <double> target (targetBuffer, i);
+            for (size_t i = 0; i < objectsSize; ++i)
+            {
+                wobbly::PointView <double> point (points, i);
+                wobbly::PointView <double> target (targetBuffer, i);
 
-            auto range = bg::distance (point, target);
+                auto range = bg::distance (point, target);
 
-            if (range < maximumRange)
-                continue;
+                if (range < maximumRange)
+                    continue;
 
-            ret |= true;
+                ret |= true;
 
-            double sin = (bg::get <1> (point) - bg::get <1> (target)) / range;
-            double cos = (bg::get <0> (point) - bg::get <0> (target)) / range;
+                auto sin = (bg::get <1> (point) - bg::get <1> (target)) / range;
+                auto cos = (bg::get <0> (point) - bg::get <0> (target)) / range;
 
-            /* Now we want to reduce range and find our new x and y offsets */
-            range = std::min (maximumRange, range);
+                /* Now we want to reduce range and
+                 * find our new x and y offsets */
+                range = std::min (maximumRange, range);
 
-            wobbly::Point newDelta (range * cos, range * sin);
-            bg::assign_point (point, target);
-            bg::subtract_point (point, newDelta);
-        }
-    });
+                wobbly::Point newDelta (range * cos, range * sin);
+                bg::assign_point (point, target);
+                bg::subtract_point (point, newDelta);
+            }
+        };
+
+    anchors.WithFirstGrabbed (action);
 
     return ret;
 }
@@ -687,25 +694,29 @@ wobbly::Model::Step (unsigned int time)
         auto       &positions (priv->mPositions.PointArray ());
         auto const &anchors (priv->mAnchors);
 
-        anchors.WithFirstGrabbed ([this, &positions](size_t index) {
-            double const tileWidth = priv->mWidth / (BezierMesh::Width - 1);
-            double const tileHeight = priv->mHeight / (BezierMesh::Height - 1);
-            size_t const count = ObjectCountForGridSize (BezierMesh::Width,
-                                                         BezierMesh::Height);
+        auto const action =
+            [this, &positions](size_t index) {
+                double const tileW = priv->mWidth / (BezierMesh::Width - 1);
+                double const tileH = priv->mHeight / (BezierMesh::Height - 1);
+                size_t const count =
+                    ObjectCountForGridSize (BezierMesh::Width,
+                                            BezierMesh::Height);
 
-            auto const anchor = wobbly::PointView <double> (positions, index);
+                auto const anchor = wobbly::PointView <double> (positions,
+                                                                index);
 
-            auto const tl (TopLeftPositionInSettledMesh (anchor,
-                                                         index,
-                                                         tileWidth,
-                                                         tileHeight));
+                auto const tl (TopLeftPositionInSettledMesh (anchor,
+                                                             index,
+                                                             tileW,
+                                                             tileH));
 
-            CalculatePositionArray (tl,
-                                    positions,
-                                    count,
-                                    tileWidth,
-                                    tileHeight);
-        });
+                CalculatePositionArray (tl,
+                                        positions,
+                                        count,
+                                        tileW,
+                                        tileH);
+            };
+        anchors.WithFirstGrabbed (action);
     }
 
     return priv->mCurrentlyUnequal;

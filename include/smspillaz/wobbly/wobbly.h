@@ -233,7 +233,4 @@ namespace wobbly
             std::unique_ptr <Private> priv;
     };
 }
-
-
-
 #endif
