@@ -514,6 +514,24 @@ namespace
                      GeometricallyEqual (transformed));
     }
 
+    TEST_P (SpringBezierModelGrabs, AlwaysSettlesAtCurrentlyAnchoredPosition)
+    {
+        /* Check that when we grab the model from each of the four corners
+         * and move that anchor by 100, 100 that the model always settles
+         * at exactly 100, 100
+         *
+         * While exact positioning isn't possible without anchors grabbed,
+         * it is almost always desired in this case */
+        wobbly::Anchor grab (model.GrabAnchor (grabPosition));
+        grab.MoveBy (wobbly::Vector (100, 100));
+
+        /* Wait for model to settle */
+        while (model.Step (1));
+
+        EXPECT_THAT (model.Extremes ()[0],
+                     GeometricallyEqual (wobbly::Point (100, 100)));
+    }
+
     SpringGrabParams const springGrabParams[] =
     {
         SpringGrabParams (wobbly::Point (0.0, 0.0),
@@ -715,6 +733,35 @@ namespace
          * so we need to do it this way */
 
         wobbly::Vector const grabPoint (0, 0);
+        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+
+        grab.MoveBy (wobbly::Point (100, 100));
+        model.MoveModelTo (wobbly::Point (0, 0));
+
+        /* Wait until the model has completely settled */
+        while (model.Step (1));
+
+        EXPECT_THAT (model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
+                                               wobbly::Point (1.5, 1.5))));
+    }
+
+    /* The only way we can test this is to perform operations dependent
+     * on a target position and ensure that they are precise to the grab's
+     * position */
+    TEST_F (SpringBezierModel, TargetPositionWithinRangeAnchorChange)
+    {
+        /* Create an anchor on 0, 0, then at TextureWidth,0 and move it by
+         * 100, 100, then move the model it back to 0, 0. This checks if
+         * the TargetPosition machinery is able to handle different anchor
+         * grabs */
+
+        {
+            wobbly::Vector const grabPoint (0, 0);
+            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+        }
+
+        wobbly::Vector const grabPoint (TextureWidth, 0);
         wobbly::Anchor grab (model.GrabAnchor (grabPoint));
 
         grab.MoveBy (wobbly::Point (100, 100));
@@ -992,7 +1039,6 @@ namespace
             {
                 positions.fill (0);
                 forces.fill (0);
-                anchors.fill (0);
             }
 
             MockIntegration strategy;
@@ -1006,7 +1052,7 @@ namespace
     TEST_F (AnchoredIntegrationLoop, ResetIndicesWithAnchor)
     {
         EXPECT_CALL (strategy, Reset (0)).Times (1);
-        ++anchors[0];
+        anchors.Lock (0);
 
         integrator (positions, forces, anchors, 0.0);
     }
@@ -1145,7 +1191,6 @@ namespace
         double const springHeight = 1.0;
 
         positions.fill (0.0);
-        anchors.fill (0);
 
         MockIntegration                      integrator;
         wobbly::SpringStep <MockIntegration> stepper (integrator,

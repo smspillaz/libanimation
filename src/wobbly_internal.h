@@ -18,6 +18,7 @@
 #include <functional>
 
 #include <boost/geometry/geometry.hpp>
+#include <boost/optional.hpp>
 
 namespace boost
 {
@@ -84,6 +85,73 @@ namespace wobbly
             Vector desiredDistance;
     };
 
+    template <int N>
+    class TrackedAnchors :
+        public Anchor::Storage
+    {
+        public:
+
+            typedef std::array <Anchor, N> InternalArray;
+
+            TrackedAnchors ()
+            {
+                anchors.fill (0);
+            }
+
+            void Lock (size_t index) override
+            {
+                /* Keep track of the first-anchor value */
+                unsigned int const previousValue = anchors[index]++;
+                if (previousValue == 0 && !firstAnchor)
+                    firstAnchor = index;
+            }
+
+            void Unlock (size_t index) override
+            {
+                unsigned int const currentValue = --anchors[index];
+                bool const firstAnchorIsThisIndex =
+                    firstAnchor.is_initialized () &&
+                    firstAnchor.get () == index;
+
+                /* Don't have first anchor anymore. Go to the
+                 * heaviest anchor next */
+                if (currentValue == 0 && firstAnchorIsThisIndex)
+                {
+                    auto largest = std::max_element (anchors.begin (),
+                                                     anchors.end ());
+                    if (*largest > 0)
+                        firstAnchor = std::distance (anchors.begin (), largest);
+                    else
+                        firstAnchor.reset ();
+                }
+            }
+
+            template <typename AnchorAction, typename NonAnchorAction>
+            void PerformActions (AnchorAction const &anchorAction,
+                                 NonAnchorAction const &nonAnchorAction) const
+            {
+                for (size_t i = 0; i < N; ++i)
+                {
+                    if (anchors[i] > 0)
+                        anchorAction (i);
+                    else
+                        nonAnchorAction (i);
+                }
+            }
+
+            template <typename Action>
+            void WithFirstGrabbed (Action const &action) const
+            {
+                if (firstAnchor.is_initialized ())
+                    action (firstAnchor.get ());
+            }
+
+        private:
+
+            std::array <unsigned int, N> anchors;
+            boost::optional <size_t> firstAnchor;
+    };
+
     class BezierMesh
     {
         public:
@@ -97,7 +165,7 @@ namespace wobbly
             static constexpr unsigned int TotalIndices2D  = TotalIndices * 2;
 
             typedef std::array <double, TotalIndices2D> MeshArray;
-            typedef std::array <unsigned int, TotalIndices> AnchorArray;
+            typedef TrackedAnchors <TotalIndices> AnchorArray;
 
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
@@ -163,27 +231,25 @@ namespace wobbly
                               BezierMesh::AnchorArray const &anchors,
                               double                        friction)
             {
-                assert (positions.size () == forces.size ());
-                assert (positions.size () / 2 == anchors.size ());
-
                 bool more = false;
-                size_t const nObjects = anchors.size ();
-
-                for (size_t i = 0; i < nObjects; ++i)
-                {
-                    if (anchors[i] > 0)
-                        strategy.Reset (i);
-                    else
-                        more |= strategy.Step (i,
+                auto const resetAction =
+                    [this](size_t index) {
+                        strategy.Reset (index);
+                    };
+                auto const stepAction =
+                    [this, friction, &positions, &forces, &more](size_t index) {
+                        more |= strategy.Step (index,
                                                1.0,
                                                friction,
                                                Model::Mass,
                                                positions,
                                                forces);
-               }
+                    };
+
+                anchors.PerformActions (resetAction, stepAction);
 
                return more;
-           }
+            }
 
         private:
 
@@ -340,15 +406,12 @@ namespace
         }
 
         template <typename Point>
-        inline void ResetIfCloseToZero (Point &p, double threshold)
+        inline void ResetIfCloseToZero (Point &p, double t)
         {
             typedef typename bgt::coordinate_type <Point>::type Component;
             detail::CoordinateOperation (p,
-                                         [&threshold](Component c) -> Component {
-                                             if (std::fabs (c) < threshold) {
-                                                 return 0.0;
-                                             }
-                                             return c;
+                                         [t](Component c) -> Component {
+                                             return std::fabs (c) < t ? 0.0 : c;
                                          });
         }
 

@@ -137,8 +137,18 @@ namespace wobbly
     {
         public:
 
+             class Storage
+             {
+                 public:
+
+                     virtual ~Storage () {};
+                     virtual void Lock (size_t index) = 0;
+                     virtual void Unlock (size_t index) = 0;
+             };
+
              Anchor (wobbly::PointView <double> &&point,
-                     unsigned int               &lockCount);
+                     Storage                    &storage,
+                     size_t                     index);
              ~Anchor ();
              Anchor (Anchor &&);
 
@@ -149,8 +159,8 @@ namespace wobbly
             Anchor (const Anchor &) = delete;
             Anchor & operator= (const Anchor &) = delete;
 
-            PointView <double> position;
-            unsigned int       &lockCount;
+            struct Private;
+            std::unique_ptr <Private> priv;
     };
 
     class Model

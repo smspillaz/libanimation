@@ -84,37 +84,56 @@ namespace
     }
 }
 
-wobbly::Anchor::Anchor (PointView <double> &&position,
-                        unsigned int       &lockCount) :
-    position (std::move (position)),
-    lockCount (lockCount)
+namespace wobbly
 {
-    ++lockCount;
+    struct Anchor::Private
+    {
+        Private (PointView <double> &&position,
+                 Anchor::Storage    &anchors,
+                 size_t             index);
+        ~Private ();
+
+        PointView <double>  position;
+        Anchor::Storage     &anchors;
+        size_t              index;
+    };
 }
 
-wobbly::Anchor::~Anchor ()
+wobbly::Anchor::Private::Private (PointView <double>      &&position,
+                                  Storage                 &anchors,
+                                  size_t                  index) :
+    position (std::move (position)),
+    anchors (anchors),
+    index (index)
 {
-    if (lockCount)
-        --lockCount;
+    anchors.Lock (index);
+}
+
+wobbly::Anchor::Anchor (PointView <double>      &&position,
+                        Storage                 &anchors,
+                        size_t                  index) :
+    priv (new Private (std::move (position), anchors, index))
+{
 }
 
 wobbly::Anchor::Anchor (Anchor &&grab) :
-    position (std::move (grab.position)),
-    /* This looks counter-intuitive, but its actually the result of a small
-     * detail in move semantics. The source object is still going to be
-     * destroyed which means the _shared_ lock count between the move-to
-     * object and this one is going to be decremented when the source
-     * goes out of scope. That means that we need to increment the lock
-     * count here when a move is performed.
-     */
-    lockCount (++grab.lockCount)
+    priv (std::move (grab.priv))
+{
+}
+
+wobbly::Anchor::Private::~Private ()
+{
+    anchors.Unlock (index);
+}
+
+wobbly::Anchor::~Anchor ()
 {
 }
 
 void
 wobbly::Anchor::MoveBy (Point const &delta)
 {
-    bg::add_point (position, delta);
+    bg::add_point (priv->position, delta);
 }
 
 wobbly::Spring::Spring (PointView <double> &&forceA,
@@ -296,8 +315,6 @@ wobbly::Model::Private::Private (Point const &initialPosition,
                             objectsSize,
                             width / (BezierMesh::Width - 1),
                             height / (BezierMesh::Height - 1));
-    
-    mAnchors.fill (0);
 }
 
 wobbly::Model::Settings const wobbly::Model::DefaultSettings =
@@ -404,45 +421,43 @@ namespace
 wobbly::Point
 wobbly::Model::Private::TargetPosition () const
 {
-    double const tileWidth = mWidth / (BezierMesh::Width - 1);
-    double const tileHeight = mHeight / (BezierMesh::Height - 1);
+    double const tileW = mWidth / (BezierMesh::Width - 1);
+    double const tileH = mHeight / (BezierMesh::Height - 1);
 
-    auto positions (mPositions.PointArray ());
+    auto points (mPositions.PointArray ());
     auto anchors (mAnchors);
-    auto firstAnchor = std::find_if (anchors.begin (), anchors.end (),
-                                     [](unsigned int const &count) -> bool {
-                                         return count > 0;
-                                     });
 
     /* If we have at least one anchor, we can take a short-cut and determine
      * the target position by reference to it */
-    if (firstAnchor != anchors.end ())
-    {
-        auto const index = std::distance (anchors.begin (), firstAnchor);
-        auto const anchor = wobbly::PointView <double> (positions, index);
+    boost::optional <wobbly::Point> early;
+    mAnchors.WithFirstGrabbed ([&early, &points, tileW, tileH] (size_t index) {
+        auto const anchor = wobbly::PointView <double> (points, index);
 
-        return TopLeftPositionInSettledMesh (anchor,
-                                             index,
-                                             tileWidth,
-                                             tileHeight);
-    }
+        early = TopLeftPositionInSettledMesh (anchor,
+                                              index,
+                                              tileW,
+                                              tileH);
+    });
+
+    if (early.is_initialized ())
+        return early.get ();
 
     /* Make our own copies of the integrators and run the integration on them */
     EulerIntegration              integrator (mVelocityIntegrator);
     SpringStep <EulerIntegration> spring (integrator,
-                                          positions,
+                                          points,
                                           mSettings.springConstant,
                                           mSettings.friction,
-                                          tileWidth,
-                                          tileHeight);
+                                          tileW,
+                                          tileH);
     ConstrainmentStep             constrainment (mConstrainment);
 
     /* Keep on integrating this copy until we know the final position */
-    while (Integrate (positions, anchors, 1, spring, constrainment));
+    while (Integrate (points, anchors, 1, spring, constrainment));
 
     /* Model will be settled, return the top left point */
     wobbly::Point result;
-    bg::assign_point (result, wobbly::PointView <double> (positions, 0));
+    bg::assign_point (result, wobbly::PointView <double> (points, 0));
 
     return result;
 }
@@ -488,7 +503,8 @@ wobbly::Model::GrabAnchor (Point const &position)
 
     /* Set up grab notification */
     return Anchor (wobbly::PointView <double> (points, index),
-                   priv->mAnchors[index]);
+                   priv->mAnchors,
+                   index);
 }
 
 void
@@ -542,18 +558,18 @@ wobbly::Model::ResizeModel (double width, double height)
      * for non-anchors that scales the distance between
      * points in model space */
     auto &points (priv->mPositions.PointArray ());
-    size_t count = ObjectCountForGridSize (BezierMesh::Width,
-                                           BezierMesh::Height);
-    for (size_t i = 0; i < count; ++i)
-    {
-        if (priv->mAnchors[i])
-            continue;
 
-        wobbly::PointView <double> p (points, i);
-        bg::subtract_point (p, modelTargetOrigin);
-        bg::multiply_point (p, scaleFactor);
-        bg::add_point (p, modelTargetOrigin);
-    }
+    auto rescaleAction =
+        [&points, &modelTargetOrigin, &scaleFactor](size_t index) {
+            wobbly::PointView <double> p (points, index);
+            bg::subtract_point (p, modelTargetOrigin);
+            bg::multiply_point (p, scaleFactor);
+            bg::add_point (p, modelTargetOrigin);
+        };
+
+    priv->mAnchors.PerformActions ([](size_t index) {
+                                   },
+                                   rescaleAction);
 
     /* On each spring, apply the scale factor */
     priv->mSpring.Scale (scaleFactorX, scaleFactorY);
@@ -584,15 +600,9 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
      * starting to integrate the model
      *
      */
-    auto firstAnchor = std::find_if (anchors.begin (), anchors.end (),
-                                     [](unsigned int const &count) -> bool {
-                                         return count > 0;
-                                     });
-    if (firstAnchor != anchors.end ())
-    {
+    anchors.WithFirstGrabbed ([this, &points, &ret](size_t index) {
         double const tileWidth = mWidth / (BezierMesh::Width - 1);
         double const tileHeight = mHeight / (BezierMesh::Height - 1);
-        auto const index = std::distance (anchors.begin (), firstAnchor);
         auto const anchor = wobbly::PointView <double> (points, index);
 
         wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
@@ -638,7 +648,7 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
             bg::assign_point (point, target);
             bg::subtract_point (point, newDelta);
         }
-    }
+    });
 
     return ret;
 }
@@ -668,9 +678,36 @@ wobbly::Model::Step (unsigned int time)
                                     priv->mConstrainment,
                                     priv->mSpring);
 
-    wobbly::PointView <double> p (priv->mPositions.PointArray (), 0);
-
     priv->mCurrentlyUnequal = moreStepsRequired;
+
+    /* If we've settled and have grabbed anchors, snap to the mesh resting
+     * point where the cursor is, this ensures exact positioning */
+    if (!priv->mCurrentlyUnequal)
+    {
+        auto       &positions (priv->mPositions.PointArray ());
+        auto const &anchors (priv->mAnchors);
+
+        anchors.WithFirstGrabbed ([this, &positions](size_t index) {
+            double const tileWidth = priv->mWidth / (BezierMesh::Width - 1);
+            double const tileHeight = priv->mHeight / (BezierMesh::Height - 1);
+            size_t const count = ObjectCountForGridSize (BezierMesh::Width,
+                                                         BezierMesh::Height);
+
+            auto const anchor = wobbly::PointView <double> (positions, index);
+
+            auto const tl (TopLeftPositionInSettledMesh (anchor,
+                                                         index,
+                                                         tileWidth,
+                                                         tileHeight));
+
+            CalculatePositionArray (tl,
+                                    positions,
+                                    count,
+                                    tileWidth,
+                                    tileHeight);
+        });
+    }
+
     return priv->mCurrentlyUnequal;
 }
 
