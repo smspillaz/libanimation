@@ -350,6 +350,176 @@ namespace
         EXPECT_FALSE (spring.ApplyForces (SpringConstant));
     }
 
+    class MockAnchorStorage :
+        public wobbly::Anchor::Storage
+    {
+        public:
+
+            MockAnchorStorage ()
+            {
+                EXPECT_CALL (*this, Lock (_)).Times (AtLeast (0));
+                EXPECT_CALL (*this, Unlock (_)).Times (AtLeast (0));
+            }
+
+            MOCK_METHOD1 (Lock, void (size_t));
+            MOCK_METHOD1 (Unlock, void (size_t));
+    };
+
+    class Anchor :
+        public Test
+    {
+        public:
+
+            MockAnchorStorage       anchorStorage;
+            SingleObjectStorage     object;
+    };
+
+    TEST_F (Anchor, ConstructionLocksWithIndex)
+    {
+        size_t const index = 0;
+        EXPECT_CALL (anchorStorage, Lock (index)).Times (1);
+
+        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+    }
+
+    TEST_F (Anchor, DestructionUnlocksWithIndex)
+    {
+        size_t const index = 0;
+        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+
+        EXPECT_CALL (anchorStorage, Unlock (index)).Times (1);
+    }
+
+    TEST_F (Anchor, MoveConstructorNoThrow)
+    {
+        size_t const index = 0;
+        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+
+        EXPECT_NO_THROW ({
+            wobbly::Anchor anchorNext (std::move (anchor));
+        });
+    }
+
+    TEST_F (Anchor, UnlockNotCalledMultipleTimesAfterMove)
+    {
+        size_t const index = 0;
+        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchorNext (std::move (anchor));
+
+        EXPECT_CALL (anchorStorage, Unlock (index)).Times (1);
+    }
+
+    TEST_F (Anchor, MoveByCausesPositionToMove)
+    {
+        size_t const index = 0;
+        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+
+        wobbly::Point const movement (100, 100);
+        anchor.MoveBy (movement);
+
+        EXPECT_THAT (object.Position (), GeometricallyEqual (movement));
+    }
+
+    class TrackedAnchors :
+        public Test
+    {
+        public:
+
+            wobbly::TrackedAnchors <3> anchors;
+    };
+
+    class MockAnchorAction
+    {
+        public:
+
+            MockAnchorAction ()
+            {
+                EXPECT_CALL (*this, Action (_)).Times (AtLeast (0));
+            }
+
+            MOCK_METHOD1 (Action, void (size_t));
+    };
+
+    TEST_F (TrackedAnchors, WithFirstGrabbedDisabledWithNoAnchorsLocked)
+    {
+        using namespace std::placeholders;
+
+        MockAnchorAction action;
+        EXPECT_CALL (action, Action (_)).Times (0);
+
+        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
+                                             &action, _1));
+    }
+
+    TEST_F (TrackedAnchors, LockingAnchorEnablesWithFirstGrabbed)
+    {
+        using namespace std::placeholders;
+
+        size_t lockIndex = 1;
+
+        anchors.Lock (lockIndex);
+
+        MockAnchorAction action;
+        EXPECT_CALL (action, Action (lockIndex)).Times (1);
+
+        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
+                                             &action, _1));
+    }
+
+    TEST_F (TrackedAnchors, FirstGrabbedTakesPriorityAsMoreLocked)
+    {
+        using namespace std::placeholders;
+
+        size_t lockIndex = 1;
+
+        anchors.Lock (lockIndex);
+        anchors.Lock (lockIndex + 1);
+
+        MockAnchorAction action;
+        EXPECT_CALL (action, Action (lockIndex)).Times (1);
+
+        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
+                                             &action, _1));
+    }
+
+    TEST_F (TrackedAnchors, MoveToNextHeavisestWhereFirstGrabbedUnlocked)
+    {
+        using namespace std::placeholders;
+
+        anchors.Lock (0);
+
+        for (size_t i = 0; i < 2; ++i)
+            anchors.Lock (1);
+
+        for (size_t i = 0; i < 3; ++i)
+            anchors.Lock (2);
+
+        anchors.Unlock (0);
+
+        MockAnchorAction action;
+        EXPECT_CALL (action, Action (2)).Times (1);
+
+        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
+                                             &action, _1));
+    }
+
+    TEST_F (TrackedAnchors, UnsetWhenAllUnlocked)
+    {
+        using namespace std::placeholders;
+
+        for (size_t i = 0; i < 3; ++i)
+            anchors.Lock (i);
+
+        for (size_t i = 0; i < 3; ++i)
+            anchors.Unlock (i);
+
+        MockAnchorAction action;
+        EXPECT_CALL (action, Action (_)).Times (0);
+
+        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
+                                             &action, _1));
+    }
+
     constexpr double TextureWidth = 50.0f;
     constexpr double TextureHeight = 100.0f;
     wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
@@ -468,7 +638,7 @@ namespace
         };
 
         EXPECT_THAT (extremes,
-                     ::testing::ElementsAreArray (textureEdges));
+                     ElementsAreArray (textureEdges));
     }
 
     TEST_F (SpringBezierModel, MovingAnchorCausesDeformation)
@@ -1213,6 +1383,204 @@ namespace
         return height / (nVerticalTiles - 1);
     }
 
+    void
+    InitializePositionsWithDimensions (wobbly::BezierMesh::MeshArray &positions,
+                                       double                        width,
+                                       double                        height)
+    {
+        double const meshWidth = wobbly::BezierMesh::Width;
+        double const meshHeight = wobbly::BezierMesh::Height;
+        double const tileWidth = TileWidth (width, meshWidth);
+        double const tileHeight = TileHeight (height, meshHeight);
+
+        for (unsigned int i = 0; i < meshHeight; ++i)
+        {
+            for (unsigned int j = 0; j < meshWidth; ++j)
+            {
+                wobbly::PointView <double> pv (positions,
+                                               i * meshWidth + j);
+                bg::assign_point (pv, wobbly::Point (tileWidth * j,
+                                                     tileHeight * i));
+            }
+        }
+    }
+
+    class ConstrainmentStep :
+        public Test
+    {
+        public:
+
+            ConstrainmentStep () :
+                range (10),
+                width (TextureWidth),
+                height (TextureHeight),
+                constrainment (range, width, height)
+            {
+                InitializePositionsWithDimensions (positions,
+                                                   TextureWidth,
+                                                   TextureHeight);
+            }
+
+            wobbly::BezierMesh::MeshArray positions;
+            wobbly::BezierMesh::AnchorArray anchors;
+
+            double                    range;
+            double                    width;
+            double                    height;
+            wobbly::ConstrainmentStep constrainment;
+    };
+
+    TEST_F (ConstrainmentStep, PointsNotAffectedWhereNoAnchorGrabbed)
+    {
+        /* Make a separate copy of the array and test against it later */
+        wobbly::BezierMesh::MeshArray expectedPositions;
+
+        InitializePositionsWithDimensions (expectedPositions,
+                                           TextureWidth,
+                                           TextureHeight);
+
+        constrainment (positions, anchors);
+
+        EXPECT_EQ (expectedPositions, positions);
+    }
+
+    TEST_F (ConstrainmentStep, ReturnsTrueWhereConstrainmentTookPlace)
+    {
+        anchors.Lock (0);
+        wobbly::PointView <double> pv (positions, 1);
+        bg::add_point (pv, wobbly::Point (range * 2, range * 2));
+
+        EXPECT_TRUE (constrainment (positions, anchors));
+    }
+
+    TEST_F (ConstrainmentStep, ReturnsFalseWhereNoConstrainmentTookPlace)
+    {
+        anchors.Lock (0);
+        wobbly::PointView <double> pv (positions, 1);
+
+        /* Not enough to cause constrainment */
+        bg::add_point (pv, wobbly::Point (range / 2, 0));
+
+        EXPECT_FALSE (constrainment (positions, anchors));
+    }
+
+    TEST_F (ConstrainmentStep, ReferencePointsFromFirstAnchor)
+    {
+        anchors.Lock (0);
+        wobbly::PointView <double> pv (positions, 0);
+        wobbly::Point const movement (range * 2, 0);
+
+        /* Move the anchored point right by range * 2, the result should
+         * be that every other point is p.x + range */
+        bg::add_point (pv, movement);
+        constrainment (positions, anchors);
+
+        wobbly::BezierMesh::MeshArray expectedPositions;
+
+        InitializePositionsWithDimensions (expectedPositions,
+                                           TextureWidth,
+                                           TextureHeight);
+
+        /* Add movement to the first point */
+        wobbly::PointView <double> epv (expectedPositions, 0);
+        bg::add_point (epv, movement);
+
+        /* Add range.x to each point starting from anchor + 1 */
+        for (size_t i = 1; i < positions.size () / 2; ++i)
+        {
+            wobbly::PointView <double> pv (expectedPositions, i);
+            bg::add_point (pv, wobbly::Point (range, 0));
+        }
+
+        std::vector <Matcher <double>> matchers;
+        for (double expected : expectedPositions)
+            matchers.push_back (::testing::DoubleEq (expected));
+
+        EXPECT_THAT (positions, ElementsAreArray (matchers));
+    }
+
+    typedef std::tuple <size_t, double> ConstrainmentStepPositionsParam;
+
+    class ConstrainmentStepPositions :
+        public ConstrainmentStep,
+        public WithParamInterface <ConstrainmentStepPositionsParam>
+    {
+        public:
+
+            ConstrainmentStepPositions () :
+                index (std::get <0> (GetParam ())),
+                ratio (std::get <1> (GetParam ()))
+            {
+                anchors.Lock ((wobbly::BezierMesh::Width *
+                               wobbly::BezierMesh::Height) / 2);
+            }
+
+            size_t index;
+            double ratio;
+    };
+
+    TEST_P (ConstrainmentStepPositions, NotAffectedWhereWithinRadiusOfRange)
+    {
+        double const absratio = std::fabs (ratio);
+
+        /* Prevent zero-division. Treat zero as positive */
+        double const sign = ratio / (absratio + (absratio == 0.0));
+        double const radiusInRange = range - (range / 2);
+
+        wobbly::PointView <double> pv (positions, index);
+        wobbly::Point expected;
+
+        bg::add_point (pv,
+                       wobbly::Point (radiusInRange * ratio,
+                                      radiusInRange * (1 - absratio) * sign));
+
+        /* Expected point is the modified point here, before constrainment */
+        bg::assign (expected, pv);
+
+        constrainment (positions, anchors);
+
+        EXPECT_THAT (pv, GeometricallyEqual (expected));
+    }
+
+    TEST_P (ConstrainmentStepPositions, AffectedWhereOutsideRadiusOfRange)
+    {
+        double absratio = std::fabs (ratio);
+
+        /* Prevent zero-division. Treat zero as positive */
+        double const sign = ratio / (absratio + (absratio == 0.0));
+        double const radiusOutOfRange = range * range;
+
+        wobbly::Point outOfRange (radiusOutOfRange * ratio,
+                                  radiusOutOfRange * (1 - absratio) * sign);
+        wobbly::Point inRange (range * ratio,
+                               range * (1 - absratio) * sign);
+
+        wobbly::PointView <double> pv (positions, index);
+        wobbly::Point expected;
+
+        /* Expected point is the actual grid point, but at its maximum range */
+        bg::assign (expected, pv);
+        bg::add_point (expected, inRange);
+
+        bg::add_point (pv, outOfRange);
+        constrainment (positions, anchors);
+
+        EXPECT_THAT (pv, GeometricallyEqual (expected));
+    }
+
+    ConstrainmentStepPositionsParam const constrainmentStepParams[] =
+    {
+        ConstrainmentStepPositionsParam (0, -1.0),
+        ConstrainmentStepPositionsParam (wobbly::BezierMesh::Width - 1, 1.0),
+        ConstrainmentStepPositionsParam ((wobbly::BezierMesh::Height - 1) *
+                                         wobbly::BezierMesh::Width, 0.0),
+        ConstrainmentStepPositionsParam (wobbly::BezierMesh::Width *
+                                         wobbly::BezierMesh::Height - 1, 0.0)
+    };
+
+    INSTANTIATE_TEST_CASE_P (Extremes, ConstrainmentStepPositions,
+                             ValuesIn (constrainmentStepParams));
+
     class BezierMesh :
         public Test
     {
@@ -1230,7 +1598,6 @@ namespace
             typedef std::function <double (Point const &)> ResultFactory;
 
             virtual void SetUp ();
-            void InitializeWithDimensions (double width, double height);
             void ApplyTransformation (MeshTransform const &);
 
             std::function <double (int)>
@@ -1242,24 +1609,9 @@ namespace
     void
     BezierMesh::SetUp ()
     {
-        InitializeWithDimensions (TextureWidth, TextureHeight);
-    }
-
-    void
-    BezierMesh::InitializeWithDimensions (double width, double height)
-    {
-        double tileWidth = TileWidth (width, wobbly::BezierMesh::Width);
-        double tileHeight = TileHeight (height, wobbly::BezierMesh::Height);
-
-        for (unsigned int i = 0; i < wobbly::BezierMesh::Height; ++i)
-        {
-            for (unsigned int j = 0; j < wobbly::BezierMesh::Width; ++j)
-            {
-                auto pv (mesh.PointForIndex (j, i));
-                bg::assign_point (pv, wobbly::Point (tileWidth * j,
-                                                     tileHeight * i));
-            }
-        }
+        InitializePositionsWithDimensions (mesh.PointArray (),
+                                           TextureWidth,
+                                           TextureHeight);
     }
 
     void
@@ -1425,7 +1777,7 @@ namespace
         wobbly::Point (1.0, 1.0)
     };
 
-    INSTANTIATE_TEST_CASE_P (MeshExtremes,
+    INSTANTIATE_TEST_CASE_P (Extremes,
                              BezierMeshPoints,
                              ValuesIn (meshExtremes));
 }

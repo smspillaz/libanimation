@@ -85,6 +85,17 @@ namespace wobbly
             Vector desiredDistance;
     };
 
+    namespace config
+    {
+        static constexpr size_t Width = 4;
+        static constexpr size_t Height = 4;
+        static constexpr size_t TotalIndices = Width * Height;
+        static constexpr size_t ArraySize  = TotalIndices * 2;
+    }
+
+    /* Precision of the model itself */
+
+
     template <int N>
     class TrackedAnchors :
         public Anchor::Storage
@@ -159,13 +170,13 @@ namespace wobbly
             BezierMesh ();
             ~BezierMesh ();
 
-            static constexpr unsigned int Width = 4;
-            static constexpr unsigned int Height = 4;
-            static constexpr unsigned int TotalIndices = Width * Height;
-            static constexpr unsigned int TotalIndices2D  = TotalIndices * 2;
+            static constexpr size_t Width = wobbly::Width;
+            static constexpr size_t Height = wobbly::Height;
+            static constexpr size_t TotalIndices = wobbly::TotalIndices;
+            static constexpr size_t TotalIndices2D  = wobbly::TotalIndices2D;
 
-            typedef std::array <double, TotalIndices2D> MeshArray;
-            typedef TrackedAnchors <TotalIndices> AnchorArray;
+            typedef std::array <double, config::ArraySize> MeshArray;
+            typedef TrackedAnchors <config::TotalIndices> AnchorArray;
 
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
@@ -183,8 +194,6 @@ namespace wobbly
             {
                 return mPoints;
             }
-
-            PointView <double const> PointForIndex (size_t x, size_t y) const;
 
             MeshArray const & PointArray () const
             {

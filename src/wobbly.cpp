@@ -274,8 +274,8 @@ namespace
     CalculatePositionArray (wobbly::Point           const &initialPosition,
                             wobbly::BezierMesh::MeshArray &array,
                             size_t const                  objectsSize,
-                            double const                  tileWidth,
-                            double const                  tileHeight)
+                            double const                  tileW,
+                            double const                  tileH)
     {
         for (size_t i = 0; i < objectsSize; ++i)
         {
@@ -285,8 +285,8 @@ namespace
             wobbly::PointView <double> position (array, i);
             bg::assign (position, initialPosition);
             bg::add_point (position,
-                wobbly::Point (column * tileWidth,
-                               row * tileHeight));
+                wobbly::Point (column * tileW,
+                               row * tileH));
         }
     }
 }
@@ -402,15 +402,15 @@ namespace
     template <typename AnchorPoint>
     wobbly::Point TopLeftPositionInSettledMesh (AnchorPoint const &anchor,
                                                 size_t      const index,
-                                                double      const tileWidth,
-                                                double      const tileHeight)
+                                                double      const tileW,
+                                                double      const tileH)
     {
         wobbly::Point start;
         bg::assign_point (start, anchor);
 
-        wobbly::Point deltaToTopLeft (tileWidth *
+        wobbly::Point deltaToTopLeft (tileW *
                                           (index % wobbly::BezierMesh::Width),
-                                      tileHeight *
+                                      tileH *
                                           (index / wobbly::BezierMesh::Width));
         bg::subtract_point (start, deltaToTopLeft);
 
@@ -604,25 +604,24 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
      */
     auto const action =
         [this, &points, &ret](size_t index) {
-            double const tileWidth = mWidth / (BezierMesh::Width - 1);
-            double const tileHeight = mHeight / (BezierMesh::Height - 1);
+            double const tileW = mWidth / (BezierMesh::Width - 1);
+            double const tileH = mHeight / (BezierMesh::Height - 1);
             auto const anchor = wobbly::PointView <double> (points, index);
 
             wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
                                                                index,
-                                                               tileWidth,
-                                                               tileHeight));
+                                                               tileW,
+                                                               tileH));
 
             size_t const objectsSize =
                 ObjectCountForGridSize (BezierMesh::Width,
                                         BezierMesh::Height);
 
-            targetBuffer.fill (0.0);
             CalculatePositionArray (start,
                                     targetBuffer,
                                     objectsSize,
-                                    tileWidth,
-                                    tileHeight);
+                                    tileW,
+                                    tileH);
 
             /* In each position in the main position array we'll work out the
              * pythagorean delta between the ideal positon and current one.
@@ -635,21 +634,23 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
                 wobbly::PointView <double> point (points, i);
                 wobbly::PointView <double> target (targetBuffer, i);
 
-                auto range = bg::distance (point, target);
+                double range = bg::distance (target, point);
 
                 if (range < maximumRange)
                     continue;
 
                 ret |= true;
 
-                auto sin = (bg::get <1> (point) - bg::get <1> (target)) / range;
-                auto cos = (bg::get <0> (point) - bg::get <0> (target)) / range;
+                auto sin = (bg::get <1> (target) - bg::get <1> (point)) / range;
+                auto cos = (bg::get <0> (target) - bg::get <0> (point)) / range;
 
-                /* Now we want to reduce range and
+                /* Now we want to vectorize range and
                  * find our new x and y offsets */
-                range = std::min (maximumRange, range);
+                double const newRange = std::min (maximumRange, range);
+                wobbly::Point newDelta (newRange * cos,
+                                        newRange * sin);
 
-                wobbly::Point newDelta (range * cos, range * sin);
+                /* Offset from the "target" position */
                 bg::assign_point (point, target);
                 bg::subtract_point (point, newDelta);
             }
@@ -835,12 +836,4 @@ wobbly::BezierMesh::PointForIndex (size_t x, size_t y)
     return wobbly::PointView <double> (mPoints,
                                        CoordIndex (x, y,
                                                    BezierMesh::Width));
-}
-
-wobbly::PointView <double const>
-wobbly::BezierMesh::PointForIndex (size_t x, size_t y) const
-{
-    return wobbly::PointView <double const> (mPoints,
-                                             CoordIndex (x, y,
-                                                         BezierMesh::Width));
 }
