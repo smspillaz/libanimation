@@ -637,8 +637,7 @@ namespace
             GeometricallyEqual (wobbly::Point (x2, y2))
         };
 
-        EXPECT_THAT (extremes,
-                     ElementsAreArray (textureEdges));
+        EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
     }
 
     TEST_F (SpringBezierModel, MovingAnchorCausesDeformation)
@@ -755,8 +754,7 @@ namespace
         model.ResizeModel (TextureWidthAfterResize,
                            TextureHeightAfterResize);
 
-        EXPECT_THAT (model.Extremes (),
-                     ElementsAreArray (scaledExtremes));
+        EXPECT_THAT (model.Extremes (), ElementsAreArray (scaledExtremes));
     }
 
     TEST_F (SpringBezierModel, PositionsScaledRelativeToModelOrigin)
@@ -787,8 +785,7 @@ namespace
         model.ResizeModel (TextureWidthAfterResize,
                            TextureHeightAfterResize);
 
-        EXPECT_THAT (model.Extremes (),
-                     ElementsAreArray (scaledExtremes));
+        EXPECT_THAT (model.Extremes (), ElementsAreArray (scaledExtremes));
     }
 
     /* We can verify this by grabbing an anchor at a known position
@@ -1496,7 +1493,8 @@ namespace
         for (double expected : expectedPositions)
             matchers.push_back (::testing::DoubleEq (expected));
 
-        EXPECT_THAT (positions, ElementsAreArray (matchers));
+        EXPECT_THAT (positions, ElementsAreArray (&matchers[0],
+                                                  matchers.size ()));
     }
 
     typedef std::tuple <size_t, double> ConstrainmentStepPositionsParam;
@@ -1732,8 +1730,7 @@ namespace
             GeometricallyEqual (wobbly::Point (TextureWidth, TextureHeight))
         };
 
-        EXPECT_THAT (extremes,
-                     ::testing::ElementsAreArray (textureEdges));
+        EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
     }
 
     class BezierMeshPoints :
