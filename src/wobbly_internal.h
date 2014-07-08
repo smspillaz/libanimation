@@ -170,10 +170,11 @@ namespace wobbly
             BezierMesh ();
             ~BezierMesh ();
 
-            static constexpr size_t Width = wobbly::Width;
-            static constexpr size_t Height = wobbly::Height;
-            static constexpr size_t TotalIndices = wobbly::TotalIndices;
-            static constexpr size_t TotalIndices2D  = wobbly::TotalIndices2D;
+            static constexpr size_t Width = wobbly::config::Width;
+            static constexpr size_t Height = wobbly::config::Height;
+            static constexpr size_t TotalIndices = wobbly::config::TotalIndices;
+            static constexpr size_t TotalIndices2D  =
+                wobbly::config::TotalIndices * 2;
 
             typedef std::array <double, config::ArraySize> MeshArray;
             typedef TrackedAnchors <config::TotalIndices> AnchorArray;
