@@ -5,7 +5,8 @@
 # See LICENCE.md for Copyright information.
 
 set (LIBWOBBLY_SOURCES
-     ${CMAKE_CURRENT_SOURCE_DIR}/wobbly.cpp)
+     ${CMAKE_CURRENT_SOURCE_DIR}/wobbly.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/wobbly_internal.h)
 
 polysquare_add_library (${LIBWOBBLY_LIBRARY} SHARED
                         SOURCES ${LIBWOBBLY_SOURCES}

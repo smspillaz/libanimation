@@ -85,6 +85,7 @@ namespace wobbly
             Vector desiredDistance;
     };
 
+    /* Precision of the model itself */
     namespace config
     {
         static constexpr size_t Width = 4;
@@ -92,9 +93,6 @@ namespace wobbly
         static constexpr size_t TotalIndices = Width * Height;
         static constexpr size_t ArraySize  = TotalIndices * 2;
     }
-
-    /* Precision of the model itself */
-
 
     template <int N>
     class TrackedAnchors :
@@ -163,21 +161,15 @@ namespace wobbly
             boost::optional <size_t> firstAnchor;
     };
 
+    typedef std::array <double, config::ArraySize> MeshArray;
+    typedef TrackedAnchors <config::TotalIndices> AnchorArray;
+
     class BezierMesh
     {
         public:
 
             BezierMesh ();
             ~BezierMesh ();
-
-            static constexpr size_t Width = wobbly::config::Width;
-            static constexpr size_t Height = wobbly::config::Height;
-            static constexpr size_t TotalIndices = wobbly::config::TotalIndices;
-            static constexpr size_t TotalIndices2D  =
-                wobbly::config::TotalIndices * 2;
-
-            typedef std::array <double, config::ArraySize> MeshArray;
-            typedef TrackedAnchors <config::TotalIndices> AnchorArray;
 
             Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
             std::array <Point, 4> const Extremes () const;
@@ -187,7 +179,7 @@ namespace wobbly
              * PointForIndex is just a convenience function to get a PointView
              * by an x, y index.
              *
-             * MeshArray gets the entire array at once and should be used
+             * PointArray gets the entire array at once and should be used
              * where the array is being accessed sequentially */
             PointView <double> PointForIndex (size_t x, size_t y);
 
@@ -203,7 +195,7 @@ namespace wobbly
 
         private:
 
-            BezierMesh::MeshArray mPoints;
+            MeshArray mPoints;
     };
 
     class ConstrainmentStep
@@ -214,8 +206,8 @@ namespace wobbly
                                double const &width,
                                double const &height);
 
-            bool operator () (BezierMesh::MeshArray         &points,
-                              BezierMesh::AnchorArray const &anchors);
+            bool operator () (MeshArray         &points,
+                              AnchorArray const &anchors);
 
         private:
 
@@ -223,23 +215,25 @@ namespace wobbly
             double const &mWidth;
             double const &mHeight;
 
-            BezierMesh::MeshArray targetBuffer;
+            MeshArray targetBuffer;
     };
 
+    /* AnchoredIntegration wraps an IntegrationStrategy and performs it on
+     * a point only if there is no corresponding anchor set for that point */
     template <typename IntegrationStrategy>
-    class AnchoredIntegrationLoop
+    class AnchoredIntegration
     {
         public:
 
-            AnchoredIntegrationLoop (IntegrationStrategy &strategy) :
+            AnchoredIntegration (IntegrationStrategy &strategy) :
                 strategy (strategy)
             {
             }
 
-            bool operator () (BezierMesh::MeshArray         &positions,
-                              BezierMesh::MeshArray const   &forces,
-                              BezierMesh::AnchorArray const &anchors,
-                              double                        friction)
+            bool operator () (MeshArray         &positions,
+                              MeshArray   const &forces,
+                              AnchorArray const &anchors,
+                              double            friction)
             {
                 bool more = false;
                 auto const resetAction =
@@ -263,6 +257,12 @@ namespace wobbly
 
         private:
 
+            typedef IntegrationStrategy IS;
+
+            AnchoredIntegration (AnchoredIntegration <IS> const &) = delete;
+            AnchoredIntegration <IS> &
+            operator= (AnchoredIntegration <IS> const &) = delete;
+
             IntegrationStrategy &strategy;
     };
 
@@ -279,51 +279,47 @@ namespace wobbly
         public:
 
             EulerIntegration ();
-        
+
             void Reset (size_t i);
-            bool Step (size_t                      i,
-                       double                      time,
-                       double                      friction,
-                       double                      mass,
-                       BezierMesh::MeshArray       &positions,
-                       BezierMesh::MeshArray const &forces);
+            bool Step (size_t          index,
+                       double          time,
+                       double          friction,
+                       double          mass,
+                       MeshArray       &positions,
+                       MeshArray const &forces);
 
         private:
 
-            BezierMesh::MeshArray velocities;
+            MeshArray velocities;
     };
 
     class SpringMesh
     {
         public:
 
-            SpringMesh (BezierMesh::MeshArray &array,
-                        double       springWidth,
-                        double       springHeight);
+            SpringMesh (MeshArray    &array,
+                        Vector const &tileSize);
 
             struct CalculationResult
             {
                 bool                        forcesExist;
-                BezierMesh::MeshArray const &forces;
+                MeshArray const &forces;
             };
 
             CalculationResult CalculateForces (double springConstant) const;
-            void Scale (double x, double y);
+            void Scale (Vector const &scaleFactor);
 
         private:
 
             SpringMesh (SpringMesh const &mesh) = delete;
             SpringMesh & operator= (SpringMesh other) = delete;
 
-            BezierMesh::MeshArray mutable mForces;
-            std::vector <Spring>          mSprings;
+            MeshArray mutable    mForces;
+            std::vector <Spring> mSprings;
 
-            double springWidth;
-            double springHeight;
+            Vector                        mSpringDimensions;
 
-            void DistributeSprings (BezierMesh::MeshArray &array,
-                                    double                width,
-                                    double                height);
+            void DistributeSprings (MeshArray &array);
     };
 
     template <typename IntegrationStrategy>
@@ -331,26 +327,25 @@ namespace wobbly
     {
         public:
 
-            SpringStep (IntegrationStrategy &strategy,
-                        BezierMesh::MeshArray &array,
-                        double const &constant,
-                        double const &friction,
-                        double       springWidth,
-                        double       springHeight) :
+            SpringStep (IntegrationStrategy  &strategy,
+                        MeshArray            &array,
+                        double         const &constant,
+                        double         const &friction,
+                        wobbly::Vector const &tileSize) :
                 constant (constant),
                 friction (friction),
                 integrator (strategy),
-                mesh (array, springWidth, springHeight)
+                mesh (array, tileSize)
             {
             }
 
-            void Scale (double x, double y)
+            void Scale (Vector const &scaleFactor)
             {
-                mesh.Scale (x, y);
+                mesh.Scale (scaleFactor);
             }
 
-            bool operator () (BezierMesh::MeshArray         &positions,
-                              BezierMesh::AnchorArray const &anchors)
+            bool operator () (MeshArray         &positions,
+                              AnchorArray const &anchors)
             {
                 auto result = mesh.CalculateForces (constant);
 
@@ -372,12 +367,12 @@ namespace wobbly
             double const &constant;
             double const &friction;
 
-            AnchoredIntegrationLoop <IntegrationStrategy> integrator;
+            AnchoredIntegration <IntegrationStrategy> integrator;
             SpringMesh                                    mesh;
     };
 }
 
-namespace
+namespace wobbly
 {
     namespace geometry
     {
@@ -447,7 +442,7 @@ namespace
 }
 
 
-namespace
+namespace wobbly
 {
     namespace euler
     {
@@ -521,19 +516,19 @@ wobbly::EulerIntegrate (double                           time,
 
 
 inline bool
-wobbly::EulerIntegration::Step (size_t                      i,
-                                double                      time,
-                                double                      friction,
-                                double                      mass,
-                                BezierMesh::MeshArray       &positions,
-                                BezierMesh::MeshArray const &forces)
+wobbly::EulerIntegration::Step (size_t          index,
+                                double          time,
+                                double          friction,
+                                double          mass,
+                                MeshArray       &positions,
+                                MeshArray const &forces)
 {
     return EulerIntegrate (time,
                            friction,
                            mass,
-                           wobbly::PointView <double> (positions, i),
-                           wobbly::PointView <double> (velocities, i),
-                           wobbly::PointView <double const> (forces, i));
+                           PointView <double> (positions, index),
+                           PointView <double> (velocities, index),
+                           PointView <double const> (forces, index));
 }
 
 inline void
@@ -543,7 +538,7 @@ wobbly::EulerIntegration::Reset (size_t index)
     bg::assign_value (velocity, 0.0);
 }
 
-namespace
+namespace wobbly
 {
     namespace springs
     {
@@ -569,7 +564,7 @@ wobbly::Spring::ApplyForces (double springConstant) const
 {
     Vector desiredNegative (desiredDistance);
     bg::multiply_value (desiredNegative, -1);
-  
+
     Vector deltaA (springs::DeltaFromDesired (posA,
                                               posB,
                                               desiredNegative));
@@ -662,12 +657,12 @@ wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
 
     /* This will access the point matrix in a linear fashion for
      * cache-efficiency */
-    for (size_t j = 0; j < Height; ++j)
+    for (size_t j = 0; j < config::Height; ++j)
     {
-        for (size_t i = 0; i < Width; ++i)
+        for (size_t i = 0; i < config::Width; ++i)
         {
-            size_t const xIdx = j * 2 * Width + i * 2;
-            size_t const yIdx = j * 2 * Width + i * 2 + 1;
+            size_t const xIdx = j * 2 * config::Width + i * 2;
+            size_t const yIdx = j * 2 * config::Width + i * 2 + 1;
 
             x += uCoefficients[j] * vCoefficients[i] * mPoints[xIdx];
             y += uCoefficients[j] * vCoefficients[i] * mPoints[yIdx];

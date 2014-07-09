@@ -70,13 +70,6 @@ namespace bg = boost::geometry;
 namespace
 {
     size_t
-    ObjectCountForGridSize (unsigned int width,
-                            unsigned int height)
-    {
-        return width * height;
-    }
-
-    size_t
     SpringCountForGridSize (unsigned int width,
                             unsigned int height)
     {
@@ -168,41 +161,38 @@ wobbly::Spring::ScaleLength (Vector scaleFactor)
     bg::multiply_point (desiredDistance, scaleFactor);
 }
 
-wobbly::SpringMesh::SpringMesh (BezierMesh::MeshArray &points,
-                                double                springWidth,
-                                double                springHeight) :
-    springWidth (springWidth),
-    springHeight (springHeight)
+wobbly::SpringMesh::SpringMesh (MeshArray    &points,
+                                Vector const &springDimensions) :
+    mSpringDimensions (springDimensions)
 {
-    DistributeSprings (points, springWidth, springHeight);
+    DistributeSprings (points);
 }
 
 void
-wobbly::SpringMesh::DistributeSprings (BezierMesh::MeshArray &points,
-                                       double                springWidth,
-                                       double                springHeight)
+wobbly::SpringMesh::DistributeSprings (MeshArray &points)
 {
-    unsigned int const gridWidth = BezierMesh::Width;
-    unsigned int const gridHeight = BezierMesh::Height;
+    double const springWidth = bg::get <0> (mSpringDimensions);
+    double const springHeight = bg::get <1> (mSpringDimensions);
 
-    size_t const nSprings = SpringCountForGridSize (gridWidth, gridHeight);
+    size_t const nSprings = SpringCountForGridSize (config::Width,
+                                                    config::Height);
 
     mSprings.clear ();
     mSprings.reserve (nSprings);
 
-    for (size_t j = 0; j < gridHeight; ++j)
+    for (size_t j = 0; j < config::Height; ++j)
     {
-        for (size_t i = 0; i < gridWidth; ++i)
+        for (size_t i = 0; i < config::Width; ++i)
         {
             typedef PointView <double> DPV;
             typedef PointView <double const> CDPV;
 
-            size_t current = j * gridWidth + i;
-            size_t below = (j + 1) * gridWidth + i;
-            size_t right = j * gridWidth + i + 1;
+            size_t current = j * config::Width + i;
+            size_t below = (j + 1) * config::Width + i;
+            size_t right = j * config::Width + i + 1;
 
             /* Spring from us to object below us */
-            if (j < gridHeight - 1)
+            if (j < config::Height - 1)
             {
                 mSprings.emplace_back (DPV (mForces, current),
                                        DPV (mForces, below),
@@ -212,7 +202,7 @@ wobbly::SpringMesh::DistributeSprings (BezierMesh::MeshArray &points,
             }
 
             /* Spring from us to object right of us */
-            if (i < gridWidth - 1)
+            if (i < config::Width - 1)
             {
                 mSprings.emplace_back (DPV (mForces, current),
                                        DPV (mForces, right),
@@ -227,12 +217,9 @@ wobbly::SpringMesh::DistributeSprings (BezierMesh::MeshArray &points,
 }
 
 void
-wobbly::SpringMesh::Scale (double x, double y)
+wobbly::SpringMesh::Scale (Vector const &scaleFactor)
 {
-    springWidth *= x;
-    springHeight *= y;
-
-    wobbly::Vector const scaleFactor (x, y);
+    bg::multiply_point (mSpringDimensions, scaleFactor);
 
     for (Spring &spring : mSprings)
         spring.ScaleLength (scaleFactor);
@@ -244,10 +231,10 @@ namespace wobbly
     {
         public:
 
-            Private (Point const &initialPosition,
-                     double      width,
-                     double      height,
-                     Settings    const &settings);
+            Private (Point    const &initialPosition,
+                     double         width,
+                     double         height,
+                     Settings const &settings);
 
             std::array <wobbly::Point, 4> const
             Extremes () const;
@@ -255,15 +242,28 @@ namespace wobbly
             wobbly::Point
             TargetPosition () const;
 
-            BezierMesh                    mPositions;
-            BezierMesh::AnchorArray       mAnchors;
-            EulerIntegration              mVelocityIntegrator;
-            SpringStep <EulerIntegration> mSpring;
+            wobbly::Vector
+            TileSize () const;
+
+            double mWidth, mHeight;
+
+            /* Anchor - is the point locked or unlocked */
+            AnchorArray                   mAnchors;
+
+            /* Constrainment data for each point */
             ConstrainmentStep             mConstrainment;
+
+            /* Position of the point on the grid */
+            BezierMesh                    mPositions;
+
+            /* Force of each point on the grid */
+            SpringStep <EulerIntegration> mSpring;
+
+            /* Velocity of the point on the grid */
+            EulerIntegration              mVelocityIntegrator;
 
             Model::Settings         const &mSettings;
 
-            double mWidth, mHeight;
             bool mCurrentlyUnequal;
     };
 }
@@ -271,50 +271,44 @@ namespace wobbly
 namespace
 {
     inline void
-    CalculatePositionArray (wobbly::Point           const &initialPosition,
-                            wobbly::BezierMesh::MeshArray &array,
-                            size_t const                  objectsSize,
-                            double const                  tileW,
-                            double const                  tileH)
+    CalculatePositionArray (wobbly::Point  const &initialPosition,
+                            wobbly::MeshArray    &array,
+                            wobbly::Vector const &tileSize)
     {
-        for (size_t i = 0; i < objectsSize; ++i)
+        assert (array.size () == wobbly::config::ArraySize);
+
+        for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
         {
-            size_t const row = i / wobbly::BezierMesh::Width;
-            size_t const column = i % wobbly::BezierMesh::Width;
+            size_t const row = i / wobbly::config::Width;
+            size_t const column = i % wobbly::config::Width;
 
             wobbly::PointView <double> position (array, i);
             bg::assign (position, initialPosition);
             bg::add_point (position,
-                wobbly::Point (column * tileW,
-                               row * tileH));
+                           wobbly::Point (column * bg::get <0> (tileSize),
+                                          row * bg::get <1> (tileSize)));
         }
     }
 }
 
-wobbly::Model::Private::Private (Point const &initialPosition,
-                                 double      width,
-                                 double      height,
-                                 Settings    const &settings) :
+wobbly::Model::Private::Private (Point    const &initialPosition,
+                                 double         width,
+                                 double         height,
+                                 Settings const &settings) :
+    mWidth (width),
+    mHeight (height),
+    mConstrainment (settings.maximumRange, mWidth, mHeight),
     mSpring (mVelocityIntegrator,
              mPositions.PointArray (),
              settings.springConstant,
              settings.friction,
-             width / (BezierMesh::Width - 1),
-             height / (BezierMesh::Height - 1)),
-    mConstrainment (settings.maximumRange, width, height),
-    mSettings (settings),
-    mWidth (width),
-    mHeight (height)
+             TileSize ()),
+    mSettings (settings)
 {
-    size_t const objectsSize = ObjectCountForGridSize (BezierMesh::Width,
-                                                       BezierMesh::Height);
-
     /* First construct the position array */
     CalculatePositionArray (initialPosition,
                             mPositions.PointArray (),
-                            objectsSize,
-                            width / (BezierMesh::Width - 1),
-                            height / (BezierMesh::Height - 1));
+                            TileSize ());
 }
 
 wobbly::Model::Settings const wobbly::Model::DefaultSettings =
@@ -347,18 +341,18 @@ wobbly::Model::~Model ()
 namespace
 {
     template <typename Integrator>
-    bool PerformIntegration (wobbly::BezierMesh::MeshArray         &positions,
-                             wobbly::BezierMesh::AnchorArray const &anchors,
-                             Integrator                            &&integrator)
+    bool PerformIntegration (wobbly::MeshArray         &positions,
+                             wobbly::AnchorArray const &anchors,
+                             Integrator                &&integrator)
     {
         return integrator (positions, anchors);
     }
 
     template <typename Integrator, typename... Remaining>
-    bool PerformIntegration (wobbly::BezierMesh::MeshArray         &positions,
-                             wobbly::BezierMesh::AnchorArray const &anchors,
-                             Integrator                            &&integrator,
-                             Remaining&&...                        remaining)
+    bool PerformIntegration (wobbly::MeshArray         &positions,
+                             wobbly::AnchorArray const &anchors,
+                             Integrator                &&integrator,
+                             Remaining&&...            remaining)
     {
         bool more = integrator (positions, anchors);
         more |= PerformIntegration (positions,
@@ -368,10 +362,10 @@ namespace
     }
 
     template <typename... Args>
-    bool Integrate (wobbly::BezierMesh::MeshArray         &positions,
-                    wobbly::BezierMesh::AnchorArray const &anchors,
-                    unsigned int                          steps,
-                    Args&&                                ...integrators)
+    bool Integrate (wobbly::MeshArray         &positions,
+                    wobbly::AnchorArray const &anchors,
+                    unsigned int              steps,
+                    Args&&                    ...integrators)
     {
         bool more = false;
 
@@ -400,18 +394,18 @@ namespace
     }
 
     template <typename AnchorPoint>
-    wobbly::Point TopLeftPositionInSettledMesh (AnchorPoint const &anchor,
-                                                size_t      const index,
-                                                double      const tileW,
-                                                double      const tileH)
+    wobbly::Point TopLeftPositionInSettledMesh (AnchorPoint    const &anchor,
+                                                size_t         const index,
+                                                wobbly::Vector const &tileSize)
     {
         wobbly::Point start;
         bg::assign_point (start, anchor);
 
-        wobbly::Point deltaToTopLeft (tileW *
-                                          (index % wobbly::BezierMesh::Width),
-                                      tileH *
-                                          (index / wobbly::BezierMesh::Width));
+        size_t const row = index % wobbly::config::Width;
+        size_t const column = index / wobbly::config::Width;
+
+        wobbly::Point deltaToTopLeft (bg::get <0> (tileSize) * row,
+                                      bg::get <1> (tileSize) * column);
         bg::subtract_point (start, deltaToTopLeft);
 
         return start;
@@ -421,8 +415,7 @@ namespace
 wobbly::Point
 wobbly::Model::Private::TargetPosition () const
 {
-    double const tileW = mWidth / (BezierMesh::Width - 1);
-    double const tileH = mHeight / (BezierMesh::Height - 1);
+    wobbly::Vector const tileSize (TileSize ());
 
     auto points (mPositions.PointArray ());
     auto anchors (mAnchors);
@@ -430,7 +423,7 @@ wobbly::Model::Private::TargetPosition () const
     /* If we have at least one anchor, we can take a short-cut and determine
      * the target position by reference to it */
     boost::optional <wobbly::Point> early;
-    mAnchors.WithFirstGrabbed ([&early, &points, tileW, tileH] (size_t index) {
+    mAnchors.WithFirstGrabbed ([&early, &points, &tileSize] (size_t index) {
                                     auto const anchor =
                                         wobbly::PointView <double> (points,
                                                                     index);
@@ -438,8 +431,7 @@ wobbly::Model::Private::TargetPosition () const
                                     early =
                                         TopLeftPositionInSettledMesh (anchor,
                                                                       index,
-                                                                      tileW,
-                                                                      tileH);
+                                                                      tileSize);
                                });
 
     if (early.is_initialized ())
@@ -451,8 +443,7 @@ wobbly::Model::Private::TargetPosition () const
                                           points,
                                           mSettings.springConstant,
                                           mSettings.friction,
-                                          tileW,
-                                          tileH);
+                                          tileSize);
     ConstrainmentStep             constrainment (mConstrainment);
 
     /* Keep on integrating this copy until we know the final position */
@@ -465,17 +456,25 @@ wobbly::Model::Private::TargetPosition () const
     return result;
 }
 
+wobbly::Vector
+wobbly::Model::Private::TileSize () const
+{
+    return wobbly::Vector (mWidth / (config::Width - 1),
+                           mHeight / (config::Height - 1));
+}
+
 namespace
 {
     size_t
-    ClosestIndexToAbsolutePosition (size_t                        count,
-                                    wobbly::BezierMesh::MeshArray &points,
-                                    wobbly::Point                 const &pos)
+    ClosestIndexToAbsolutePosition (wobbly::MeshArray   &points,
+                                    wobbly::Point const &pos)
     {
         boost::optional <size_t> nearestIndex;
         double distance = std::numeric_limits <double>::max ();
 
-        for (size_t i = 0; i < count; ++i)
+        assert (points.size () == wobbly::config::ArraySize);
+
+        for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
         {
             wobbly::PointView <double> view (points, i);
             double objectDistance = std::fabs (bg::distance (pos, view));
@@ -495,16 +494,12 @@ wobbly::Anchor
 wobbly::Model::GrabAnchor (Point const &position)
 {
     auto &points = priv->mPositions.PointArray ();
-    size_t count = ObjectCountForGridSize (BezierMesh::Width,
-                                           BezierMesh::Height);
-    size_t index = ClosestIndexToAbsolutePosition (count,
-                                                   points,
+    size_t index = ClosestIndexToAbsolutePosition (points,
                                                    position);
 
     /* Bets are off once we've grabbed an anchor, the model is now unequal */
     priv->mCurrentlyUnequal = true;
 
-    /* Set up grab notification */
     return Anchor (wobbly::PointView <double> (points, index),
                    priv->mAnchors,
                    index);
@@ -514,9 +509,8 @@ void
 wobbly::Model::MoveModelBy (Point const &delta)
 {
     auto &points (priv->mPositions.PointArray ());
-    size_t count = ObjectCountForGridSize (BezierMesh::Width,
-                                           BezierMesh::Height);
-    for (size_t i = 0; i < count; ++i)
+
+    for (size_t i = 0; i < config::TotalIndices; ++i)
     {
         PointView <double> pv (points, i);
         bg::add_point (pv, delta);
@@ -547,10 +541,8 @@ wobbly::Model::ResizeModel (double width, double height)
     assert (height > 0.0f);
 
     /* Second, work out the scale factors */
-    double const scaleFactorX = width / priv->mWidth;
-    double const scaleFactorY = height / priv->mHeight;
-
-    wobbly::Vector const scaleFactor (scaleFactorX, scaleFactorY);
+    wobbly::Vector const scaleFactor (width / priv->mWidth,
+                                      height / priv->mHeight);
 
     if (bg::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
         return;
@@ -575,7 +567,7 @@ wobbly::Model::ResizeModel (double width, double height)
                                    rescaleAction);
 
     /* On each spring, apply the scale factor */
-    priv->mSpring.Scale (scaleFactorX, scaleFactorY);
+    priv->mSpring.Scale (scaleFactor);
 
     /* Apply width and height changes */
     priv->mWidth = width;
@@ -593,8 +585,8 @@ wobbly::ConstrainmentStep::ConstrainmentStep (double const &threshold,
 }
 
 bool
-wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
-                                        BezierMesh::AnchorArray const &anchors)
+wobbly::ConstrainmentStep::operator () (MeshArray         &points,
+                                        AnchorArray const &anchors)
 {
     bool ret = false;
     /* If an anchor is grabbed, then the model will be considered constrained.
@@ -604,24 +596,17 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
      */
     auto const action =
         [this, &points, &ret](size_t index) {
-            double const tileW = mWidth / (BezierMesh::Width - 1);
-            double const tileH = mHeight / (BezierMesh::Height - 1);
+            wobbly::Vector tileSize (mWidth / (config::Width - 1),
+                                     mHeight / (config::Height - 1));
             auto const anchor = wobbly::PointView <double> (points, index);
 
             wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
                                                                index,
-                                                               tileW,
-                                                               tileH));
-
-            size_t const objectsSize =
-                ObjectCountForGridSize (BezierMesh::Width,
-                                        BezierMesh::Height);
+                                                               tileSize));
 
             CalculatePositionArray (start,
                                     targetBuffer,
-                                    objectsSize,
-                                    tileW,
-                                    tileH);
+                                    tileSize);
 
             /* In each position in the main position array we'll work out the
              * pythagorean delta between the ideal positon and current one.
@@ -629,7 +614,7 @@ wobbly::ConstrainmentStep::operator () (BezierMesh::MeshArray         &points,
              * and reapply it */
             double const maximumRange = threshold;
 
-            for (size_t i = 0; i < objectsSize; ++i)
+            for (size_t i = 0; i < config::TotalIndices; ++i)
             {
                 wobbly::PointView <double> point (points, i);
                 wobbly::PointView <double> target (targetBuffer, i);
@@ -697,25 +682,18 @@ wobbly::Model::Step (unsigned int time)
 
         auto const action =
             [this, &positions](size_t index) {
-                double const tileW = priv->mWidth / (BezierMesh::Width - 1);
-                double const tileH = priv->mHeight / (BezierMesh::Height - 1);
-                size_t const count =
-                    ObjectCountForGridSize (BezierMesh::Width,
-                                            BezierMesh::Height);
+                wobbly::Vector tileSize (priv->TileSize ());
 
                 auto const anchor = wobbly::PointView <double> (positions,
                                                                 index);
 
                 auto const tl (TopLeftPositionInSettledMesh (anchor,
                                                              index,
-                                                             tileW,
-                                                             tileH));
+                                                             tileSize));
 
                 CalculatePositionArray (tl,
                                         positions,
-                                        count,
-                                        tileW,
-                                        tileH);
+                                        tileSize);
             };
         anchors.WithFirstGrabbed (action);
     }
@@ -763,12 +741,18 @@ namespace
         bg::for_each_coordinate (point, PointRoundOperation ());
     }
 
-    template <typename Numeric, typename Minimum, typename Maximum>
-    void SetToExtreme (wobbly::Point  &p,
-                       Numeric        x,
-                       Minimum        xFinder,
-                       Numeric        y,
-                       Maximum        yFinder)
+    template <typename Numeric>
+    struct NumericTraits
+    {
+        typedef Numeric (*Chooser) (Numeric, Numeric);
+    };
+
+    template <typename Numeric>
+    void SetToExtreme (wobbly::Point                             &p,
+                       Numeric                                   x,
+                       typename NumericTraits <Numeric>::Chooser xFinder,
+                       Numeric                                   y,
+                       typename NumericTraits <Numeric>::Chooser yFinder)
     {
         bg::set <0> (p, xFinder (bg::get <0> (p), x));
         bg::set <1> (p, yFinder (bg::get <1> (p), y));
@@ -816,7 +800,7 @@ wobbly::BezierMesh::Extremes () const
         return result;
     };
 
-    for (size_t i = 0; i < Width * Height * 2; i += 2)
+    for (size_t i = 0; i < config::Width * config::Height * 2; i += 2)
     {
         double const x = mPoints[i];
         double const y = mPoints[i + 1];
@@ -835,5 +819,5 @@ wobbly::BezierMesh::PointForIndex (size_t x, size_t y)
 {
     return wobbly::PointView <double> (mPoints,
                                        CoordIndex (x, y,
-                                                   BezierMesh::Width));
+                                                   config::Width));
 }

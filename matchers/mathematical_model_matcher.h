@@ -21,6 +21,7 @@
 
 #include <functional>
 #include <vector>
+#include <type_traits>
 
 #include <gmock/gmock.h>
 
@@ -421,24 +422,78 @@ namespace wobbly
             public:
 
                 GeometricallyEqualMatcher (Compare const &geometry) :
-                    mGeometry (geometry)
+                    geometry (geometry)
                 {
                 }
 
-                bool MatchAndExplain (GeometryType const     &x,
+                bool MatchAndExplain (GeometryType     const &x,
                                       t::MatchResultListener *listener) const
                 {
-                    return bg::equals (x, mGeometry);
+                    /* The right hand side is significant since we have
+                     * slightly different behaviour where rhs == 0 */
+                    return compare (x, geometry);
                 }
 
                 void DescribeTo (std::ostream *os) const
                 {
-                    *os << "geometrically equal to " << mGeometry;
+                    *os << "geometrically equal to " << geometry;
                 }
 
             private:
 
-                Compare mGeometry;
+                template <typename LHS, typename RHS, size_t D, size_t Cnt>
+                struct Equal
+                {
+                    static inline bool apply (LHS const &lhs,
+                                              RHS const &rhs)
+                    {
+                        typedef bg::traits::coordinate_type <LHS> LT;
+                        typedef typename LT::type LTT;
+
+                        bool result = false;
+
+                        /* If we are comparing to zero, then use
+                         * check_is_small as opposed to check_is_close */
+                        if (bg::get <D> (rhs) == 0.0)
+                            result = btt::check_is_small (bg::get <D> (lhs),
+                                                          10e-9);
+                        else
+                        {
+                            auto tolerance = btt::percent_tolerance (10e-9);
+                            auto within  =
+                                btt::close_at_tolerance <LTT> (tolerance);
+                            result = within (bg::get <D> (lhs),
+                                             bg::get <D> (rhs));
+                        }
+
+                        return result &&
+                               Equal <LHS, RHS, D + 1, Cnt>::apply (lhs, rhs);
+                    }
+                };
+
+                template <typename LHS, typename RHS, size_t Cnt>
+                struct Equal <LHS, RHS, Cnt, Cnt>
+                {
+                    static inline bool apply (LHS const &lhs, RHS const &rhs)
+                    {
+                        return true;
+                    }
+                };
+
+                template <typename LHS, typename RHS>
+                static inline bool compare (LHS const &lhs, RHS const &rhs)
+                {
+                    typedef typename bg::traits::dimension <LHS>::type DimLHS;
+                    typedef typename bg::traits::dimension <RHS>::type DimRHS;
+
+                    BOOST_MPL_ASSERT ((boost::is_same <DimLHS, DimRHS>));
+
+                    typedef Equal <LHS, RHS, 0, DimLHS::value> Comparator;
+
+                    return Comparator::apply (lhs, rhs);
+                }
+
+                Compare geometry;
         };
 
         /* We want to be able to pass any compartible boost::geometry to this
@@ -467,10 +522,110 @@ namespace wobbly
                 Geom const &geometry;
         };
 
+        template <typename T>
+        class NormalEqHelper
+        {
+            public:
+
+                NormalEqHelper (T const &matchee) :
+                    matchee (matchee)
+                {
+                }
+
+                operator t::Matcher <T const &> () const
+                {
+                    return t::Eq (matchee);
+                }
+
+            private:
+
+                T const &matchee;
+        };
+
         template <typename Geom>
         GeometricallyEqualHelper <Geom> GeometricallyEqual (Geom const &geom)
         {
             return GeometricallyEqualHelper <Geom> (geom);
+        }
+
+        namespace detail
+        {
+            template <typename T>
+            struct GeoTrait :
+                public bg::traits::tag <T>
+            {
+            };
+
+            template <typename T>
+            struct Geo
+            {
+                static constexpr bool value =
+                    !(std::is_same <typename GeoTrait <T>::type, void>::value);
+            };
+
+            template <typename T>
+            struct IsGeometry :
+                public std::enable_if <Geo <T>::value>
+            {
+            };
+
+            template <typename T>
+            struct IsNotGeometry :
+                public std::enable_if <!Geo <T>::value>
+            {
+            };
+
+            template <typename T, typename = void>
+            struct EqDispatch
+            {
+            };
+
+            template <typename T>
+            struct EqDispatch <T,
+                               typename IsNotGeometry <T>::type>
+            {
+                typedef NormalEqHelper <T> Factory;
+            };
+
+            template <typename T>
+            struct EqDispatch <T,
+                               typename IsGeometry <T>::type>
+            {
+                typedef GeometricallyEqualHelper <T> Factory;
+            };
+
+            template <typename Matchee, typename Factory>
+            class EqDispatchHelper
+            {
+                public:
+
+                    EqDispatchHelper (Matchee const &matchee) :
+                        mFactory (matchee)
+                    {
+                    }
+
+                    template <typename T>
+                    operator t::Matcher <T const &> () const
+                    {
+                        return mFactory;
+                    }
+
+                    Factory mFactory;
+            };
+            template <typename Matchee, typename Factory>
+            EqDispatchHelper <Matchee, Factory>
+            EqDispatcher (Matchee const &matchee)
+            {
+                return EqDispatchHelper <Matchee, Factory> (matchee);
+            }
+        }
+
+        template <typename T>
+        detail::EqDispatchHelper <T, typename detail::EqDispatch <T>::Factory>
+        Eq (T const &matchee)
+        {
+            typedef typename detail::EqDispatch <T>::Factory Factory;
+            return detail::EqDispatcher <T, Factory> (matchee);
         }
 
         template <typename NumericType>
@@ -639,5 +794,6 @@ namespace wobbly
         }
     }
 }
+
 
 #endif

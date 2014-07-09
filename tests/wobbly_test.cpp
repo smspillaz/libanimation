@@ -22,7 +22,6 @@
 using ::testing::_;
 using ::testing::AtLeast;
 using ::testing::ElementsAreArray;
-using ::testing::Eq;
 using ::testing::Invoke;
 using ::testing::MakeMatcher;
 using ::testing::MakePolymorphicMatcher;
@@ -37,7 +36,7 @@ using ::testing::Types;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
-using ::wobbly::matchers::GeometricallyEqual;
+using ::wobbly::matchers::Eq;
 using ::wobbly::matchers::SatisfiesModel;
 using ::wobbly::matchers::WithSamples;
 using ::wobbly::matchers::WithTolerance;
@@ -204,9 +203,9 @@ namespace
         spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force,
-                     GeometricallyEqual (wobbly::Vector (0, 0)));
+                     Eq (wobbly::Vector (0, 0)));
         EXPECT_THAT (second.force,
-                     GeometricallyEqual (wobbly::Vector (0, 0)));
+                     Eq (wobbly::Vector (0, 0)));
     }
 
     template <typename Position>
@@ -236,7 +235,7 @@ namespace
 
         spring.ApplyForces (SpringConstant);
 
-        EXPECT_THAT (first.force, GeometricallyEqual (expectedForce));
+        EXPECT_THAT (first.force, Eq (expectedForce));
     }
 
     TEST_F (Springs, ForceAppliedToSecondObjectProportionalToNegativeDistanceSK)
@@ -252,7 +251,7 @@ namespace
 
         spring.ApplyForces (SpringConstant);
 
-        EXPECT_THAT (second.force, GeometricallyEqual (expectedForce));
+        EXPECT_THAT (second.force, Eq (expectedForce));
     }
 
     TEST_F (Springs, ForceAccumulatesWithApplications)
@@ -271,7 +270,7 @@ namespace
         for (unsigned int i = 0; i < nApplications; ++i)
             spring.ApplyForces (SpringConstant);
 
-        EXPECT_THAT (first.force, GeometricallyEqual (expectedForce));
+        EXPECT_THAT (first.force, Eq (expectedForce));
     }
 
     TEST_F (Springs, ForceRelationshipIsLinearlyRelatedToDistance)
@@ -305,7 +304,7 @@ namespace
                     wobbly::Vector (justBelowThreshold, FirstPositionY));
         spring.ApplyForces (SpringConstant);
 
-        EXPECT_THAT (first.force, GeometricallyEqual (wobbly::Vector (0, 0)));
+        EXPECT_THAT (first.force, Eq (wobbly::Vector (0, 0)));
     }
 
     TEST_F (Springs, ApplyForcesReturnsTrueIfForceRemaining)
@@ -417,7 +416,7 @@ namespace
         wobbly::Point const movement (100, 100);
         anchor.MoveBy (movement);
 
-        EXPECT_THAT (object.Position (), GeometricallyEqual (movement));
+        EXPECT_THAT (object.Position (), Eq (movement));
     }
 
     class TrackedAnchors :
@@ -585,7 +584,7 @@ namespace
         bg::add_point (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
 
         EXPECT_THAT (point,
-                     GeometricallyEqual (TextureCenterOffsetByOne));
+                     Eq (TextureCenterOffsetByOne));
     }
 
     TEST_F (SpringBezierModel, NoDeformationOnMovementWithAnchorUngrabbed)
@@ -602,7 +601,7 @@ namespace
 
 
         EXPECT_THAT (point,
-                     GeometricallyEqual (TextureCenterOffsetByOne));
+                     Eq (TextureCenterOffsetByOne));
     }
 
     TEST_F (SpringBezierModel, MovingEntireModelCausesNoDeformationWithAnchor)
@@ -616,7 +615,7 @@ namespace
 
 
         EXPECT_THAT (point,
-                     GeometricallyEqual (TextureCenterOffsetByOne));
+                     Eq (TextureCenterOffsetByOne));
     }
 
     TEST_F (SpringBezierModel, MovingEntireModelChangesExtremesPositionsExactly)
@@ -631,10 +630,10 @@ namespace
         std::array <wobbly::Point, 4> const extremes = model.Extremes ();
         Matcher <wobbly::Point const &> const textureEdges[] =
         {
-            GeometricallyEqual (wobbly::Point (x1, y1)),
-            GeometricallyEqual (wobbly::Point (x2, y1)),
-            GeometricallyEqual (wobbly::Point (x1, y2)),
-            GeometricallyEqual (wobbly::Point (x2, y2))
+            Eq (wobbly::Point (x1, y1)),
+            Eq (wobbly::Point (x2, y1)),
+            Eq (wobbly::Point (x1, y2)),
+            Eq (wobbly::Point (x2, y2))
         };
 
         EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
@@ -648,7 +647,7 @@ namespace
         auto point (GetTruncatedDeformedCenter (model));
 
         EXPECT_THAT (point,
-                     Not (GeometricallyEqual (TextureCenter)));
+                     Not (Eq (TextureCenter)));
     }
 
     typedef std::tuple <wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
@@ -680,7 +679,7 @@ namespace
         bg::add_point (transformed, movement);
 
         EXPECT_THAT (model.Extremes ()[extremeIndex],
-                     GeometricallyEqual (transformed));
+                     Eq (transformed));
     }
 
     TEST_P (SpringBezierModelGrabs, AlwaysSettlesAtCurrentlyAnchoredPosition)
@@ -698,7 +697,7 @@ namespace
         while (model.Step (1));
 
         EXPECT_THAT (model.Extremes ()[0],
-                     GeometricallyEqual (wobbly::Point (100, 100)));
+                     Eq (wobbly::Point (100, 100)));
     }
 
     SpringGrabParams const springGrabParams[] =
@@ -740,7 +739,7 @@ namespace
         auto scaledPointMatcher =
             [&scaleFactor](wobbly::Point p) -> PointMatcher {
                 bg::multiply_point (p, scaleFactor);
-                return GeometricallyEqual (p);
+                return Eq (p);
             };
 
         PointMatcher const scaledExtremes[4] =
@@ -771,7 +770,7 @@ namespace
                 bg::subtract_point (p, movement);
                 bg::multiply_point (p, scaleFactor);
                 bg::add_point (p, movement);
-                return GeometricallyEqual (p);
+                return Eq (p);
             };
 
         PointMatcher const scaledExtremes[4] =
@@ -818,7 +817,7 @@ namespace
 
         /* We can assume that Extremes ()[0] is the top-left position as
          * the other tests enforce it being the minimum,minimum position */
-        EXPECT_THAT (model.Extremes ()[0], GeometricallyEqual (position));
+        EXPECT_THAT (model.Extremes ()[0], Eq (position));
     }
 
     template <typename ParentGeometry>
@@ -843,7 +842,7 @@ namespace
                 *os << "is within :" << std::endl;
                 bg::model::polygon <wobbly::Point> poly;
                 bg::assign (poly, parent);
-                bg::for_each_point (poly, PrintPoint (*os));
+                bg::for_each_point (poly, PrintPoint (os));
             }
 
             void DescribeNegationTo (std::ostream *os) const
@@ -851,7 +850,7 @@ namespace
                 *os << "is not within :" << std::endl;
                 bg::model::polygon <wobbly::Point> poly;
                 bg::assign (poly, parent);
-                bg::for_each_point (poly, PrintPoint (*os));
+                bg::for_each_point (poly, PrintPoint (os));
             }
 
         private:
@@ -860,7 +859,7 @@ namespace
             {
                 public:
 
-                    PrintPoint (std::ostream &os) :
+                    PrintPoint (std::ostream *os) :
                         os (os)
                     {
                     }
@@ -868,12 +867,12 @@ namespace
                     template <typename Point>
                     void operator () (Point const &p)
                     {
-                        os << " - " << p << std::endl;
+                        *os << " - " << p << std::endl;
                     }
 
                 private:
 
-                   std::ostream &os;
+                   std::ostream *os;
             };
 
             ParentGeometry parent;
@@ -1192,8 +1191,8 @@ namespace
                                   double,
                                   double,
                                   double,
-                                  wobbly::BezierMesh::MeshArray       &,
-                                  wobbly::BezierMesh::MeshArray const &));
+                                  wobbly::MeshArray       &,
+                                  wobbly::MeshArray const &));
     };
 
     class AnchoredIntegrationLoop :
@@ -1209,11 +1208,11 @@ namespace
             }
 
             MockIntegration strategy;
-            wobbly::AnchoredIntegrationLoop <MockIntegration> integrator;
+            wobbly::AnchoredIntegration <MockIntegration> integrator;
 
-            wobbly::BezierMesh::MeshArray positions;
-            wobbly::BezierMesh::MeshArray forces;
-            wobbly::BezierMesh::AnchorArray anchors;
+            wobbly::MeshArray positions;
+            wobbly::MeshArray forces;
+            wobbly::AnchorArray anchors;
     };
 
     TEST_F (AnchoredIntegrationLoop, ResetIndicesWithAnchor)
@@ -1244,8 +1243,8 @@ namespace
             }
 
             Integrator integrator;
-            wobbly::BezierMesh::MeshArray points;
-            wobbly::BezierMesh::MeshArray forces;
+            wobbly::MeshArray points;
+            wobbly::MeshArray forces;
     };
 
     typedef Types <wobbly::EulerIntegration> IntegrationStrategies;
@@ -1259,7 +1258,7 @@ namespace
 
         TestFixture::integrator.Reset (0);
 
-        EXPECT_THAT (pointView, GeometricallyEqual (wobbly::Point (0, 0)));
+        EXPECT_THAT (pointView, Eq (wobbly::Point (0, 0)));
     }
 
     TYPED_TEST (IntegrationStrategy, EffectiveVelocityChangedToZeroOnReset)
@@ -1294,7 +1293,7 @@ namespace
 
         /* After integration, the point should not have moved because
          * it has no velocity */
-        EXPECT_THAT (pointView, GeometricallyEqual (expectedPosition));
+        EXPECT_THAT (pointView, Eq (expectedPosition));
     }
 
     TYPED_TEST (IntegrationStrategy, VelocityAffectedWithNewForcesAfterReset)
@@ -1316,7 +1315,7 @@ namespace
                                       TestFixture::forces);
 
         EXPECT_THAT (pointView,
-                     Not (GeometricallyEqual (initialPosition)));
+                     Not (Eq (initialPosition)));
     }
 
     TYPED_TEST (IntegrationStrategy, PositionChangesParabolicallyOverTime)
@@ -1350,12 +1349,11 @@ namespace
     {
         /* All points will start at zero, so a positive spring force
          * will already be exerted */
-        wobbly::BezierMesh::MeshArray positions;
-        wobbly::BezierMesh::AnchorArray anchors;
+        wobbly::MeshArray positions;
+        wobbly::AnchorArray anchors;
         double const springConstant = 1.0;
         double const springFriction = 1.0;
-        double const springWidth = 1.0;
-        double const springHeight = 1.0;
+        wobbly::Vector const springDimensions (1.0, 1.0);
 
         positions.fill (0.0);
 
@@ -1364,8 +1362,7 @@ namespace
                                                       positions,
                                                       springConstant,
                                                       springFriction,
-                                                      springWidth,
-                                                      springHeight);
+                                                      springDimensions);
 
         EXPECT_TRUE (stepper (positions, anchors));
     }
@@ -1381,12 +1378,12 @@ namespace
     }
 
     void
-    InitializePositionsWithDimensions (wobbly::BezierMesh::MeshArray &positions,
-                                       double                        width,
-                                       double                        height)
+    InitializePositionsWithDimensions (wobbly::MeshArray &positions,
+                                       double            width,
+                                       double            height)
     {
-        double const meshWidth = wobbly::BezierMesh::Width;
-        double const meshHeight = wobbly::BezierMesh::Height;
+        double const meshWidth = wobbly::config::Width;
+        double const meshHeight = wobbly::config::Height;
         double const tileWidth = TileWidth (width, meshWidth);
         double const tileHeight = TileHeight (height, meshHeight);
 
@@ -1418,8 +1415,8 @@ namespace
                                                    TextureHeight);
             }
 
-            wobbly::BezierMesh::MeshArray positions;
-            wobbly::BezierMesh::AnchorArray anchors;
+            wobbly::MeshArray positions;
+            wobbly::AnchorArray anchors;
 
             double                    range;
             double                    width;
@@ -1430,7 +1427,7 @@ namespace
     TEST_F (ConstrainmentStep, PointsNotAffectedWhereNoAnchorGrabbed)
     {
         /* Make a separate copy of the array and test against it later */
-        wobbly::BezierMesh::MeshArray expectedPositions;
+        wobbly::MeshArray expectedPositions;
 
         InitializePositionsWithDimensions (expectedPositions,
                                            TextureWidth,
@@ -1472,7 +1469,7 @@ namespace
         bg::add_point (pv, movement);
         constrainment (positions, anchors);
 
-        wobbly::BezierMesh::MeshArray expectedPositions;
+        wobbly::MeshArray expectedPositions;
 
         InitializePositionsWithDimensions (expectedPositions,
                                            TextureWidth,
@@ -1509,8 +1506,8 @@ namespace
                 index (std::get <0> (GetParam ())),
                 ratio (std::get <1> (GetParam ()))
             {
-                anchors.Lock ((wobbly::BezierMesh::Width *
-                               wobbly::BezierMesh::Height) / 2);
+                anchors.Lock ((wobbly::config::Width *
+                               wobbly::config::Height) / 2);
             }
 
             size_t index;
@@ -1537,7 +1534,7 @@ namespace
 
         constrainment (positions, anchors);
 
-        EXPECT_THAT (pv, GeometricallyEqual (expected));
+        EXPECT_THAT (pv, Eq (expected));
     }
 
     TEST_P (ConstrainmentStepPositions, AffectedWhereOutsideRadiusOfRange)
@@ -1563,17 +1560,17 @@ namespace
         bg::add_point (pv, outOfRange);
         constrainment (positions, anchors);
 
-        EXPECT_THAT (pv, GeometricallyEqual (expected));
+        EXPECT_THAT (pv, Eq (expected));
     }
 
     ConstrainmentStepPositionsParam const constrainmentStepParams[] =
     {
         ConstrainmentStepPositionsParam (0, -1.0),
-        ConstrainmentStepPositionsParam (wobbly::BezierMesh::Width - 1, 1.0),
-        ConstrainmentStepPositionsParam ((wobbly::BezierMesh::Height - 1) *
-                                         wobbly::BezierMesh::Width, 0.0),
-        ConstrainmentStepPositionsParam (wobbly::BezierMesh::Width *
-                                         wobbly::BezierMesh::Height - 1, 0.0)
+        ConstrainmentStepPositionsParam (wobbly::config::Width - 1, 1.0),
+        ConstrainmentStepPositionsParam ((wobbly::config::Height - 1) *
+                                         wobbly::config::Width, 0.0),
+        ConstrainmentStepPositionsParam (wobbly::config::Width *
+                                         wobbly::config::Height - 1, 0.0)
     };
 
     INSTANTIATE_TEST_CASE_P (Extremes, ConstrainmentStepPositions,
@@ -1615,9 +1612,9 @@ namespace
     void
     BezierMesh::ApplyTransformation (MeshTransform const &transform)
     {
-        for (size_t i = 0; i < wobbly::BezierMesh::Height; ++i)
+        for (size_t i = 0; i < wobbly::config::Height; ++i)
         {
-            for (size_t j = 0; j < wobbly::BezierMesh::Width; ++j)
+            for (size_t j = 0; j < wobbly::config::Width; ++j)
             {
                 auto pv (mesh.PointForIndex (j, i));
                 transform (pv, j, i);
@@ -1724,10 +1721,10 @@ namespace
         std::array <wobbly::Point, 4> const extremes = mesh.Extremes ();
         Matcher <wobbly::Point const &> const textureEdges[] =
         {
-            GeometricallyEqual (wobbly::Point (0, 0)),
-            GeometricallyEqual (wobbly::Point (TextureWidth, 0)),
-            GeometricallyEqual (wobbly::Point (0, TextureHeight)),
-            GeometricallyEqual (wobbly::Point (TextureWidth, TextureHeight))
+            Eq (wobbly::Point (0, 0)),
+            Eq (wobbly::Point (TextureWidth, 0)),
+            Eq (wobbly::Point (0, TextureHeight)),
+            Eq (wobbly::Point (TextureWidth, TextureHeight))
         };
 
         EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
@@ -1763,7 +1760,7 @@ namespace
         auto prediction (TexturePrediction (point));
         auto interpolated (MeshInterpolation (mesh, point));
 
-        EXPECT_THAT (interpolated, GeometricallyEqual (prediction));
+        EXPECT_THAT (interpolated, Eq (prediction));
     }
 
     wobbly::Point const meshExtremes[] =
