@@ -747,7 +747,7 @@ wobbly::Model::GrabAnchor (Point const &position) throw (std::runtime_error)
         [&handle, &getTarget](PosFetch fetch) -> SpringMesh::PosPreference {
             SpringMesh::PosPreference target = std::bind (getTarget, _1, fetch);
             SpringMesh::PosPreference original =
-                [&fetch](Spring const &spring) {
+                [fetch](Spring const &spring) {
                     return (spring.*fetch) ();
                 };
             return handle == 1 ? target : original;
