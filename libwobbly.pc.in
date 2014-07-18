@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@/bin
+libdir=@CMAKE_INSTALL_PREFIX@/lib
+includedir=@CMAKE_INSTALL_PREFIX@/include
+
+Name: Libwobbly
+Description: Library to provide a spring-controlled bezier mesh
+Version: 0.1
+Libs: -L${libdir} -lsmspillaz_wobbly
+Cflags: -I${includedir}
