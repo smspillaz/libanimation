@@ -238,7 +238,7 @@ namespace boost
             {
                 static inline double get (wobbly::DPV const &p)
                 {
-                    return p.template get <0> ();
+                    return p.get <0> ();
                 }
             };
 
@@ -247,7 +247,7 @@ namespace boost
             {
                 static inline double get (wobbly::DPV const &p)
                 {
-                    return p.template get <1> ();
+                    return p.get <1> ();
                 }
             };
         }
