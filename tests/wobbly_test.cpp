@@ -33,6 +33,7 @@ using ::testing::Not;
 using ::testing::PolymorphicMatcher;
 using ::testing::Test;
 using ::testing::Types;
+using ::testing::Values;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
@@ -91,6 +92,43 @@ namespace wobbly
 
 namespace
 {
+    class DoublePointView :
+        public Test,
+        public WithParamInterface <size_t>
+    {
+    public:
+
+        DoublePointView () :
+            pointOffset (GetParam ()),
+            arrayOffset (GetParam () * 2)
+        {
+            array.fill (0);
+        }
+
+        std::array <double, 4> array;
+        size_t                 pointOffset;
+        size_t                 arrayOffset;
+    };
+
+    TEST_P (DoublePointView, WriteXWithOffset)
+    {
+        wobbly::PointView <double> pv (array, pointOffset);
+        bg::set <0> (pv, 1);
+
+        EXPECT_EQ (array[arrayOffset], 1);
+    }
+
+    TEST_P (DoublePointView, WriteYWithOffset)
+    {
+        wobbly::PointView <double> pv (array, pointOffset);
+        bg::set <1> (pv, 1);
+
+        EXPECT_EQ (array[arrayOffset + 1], 1);
+    }
+
+    INSTANTIATE_TEST_CASE_P (DuplexMeshArray, DoublePointView,
+                             Values (0, 1));
+
     class SingleObjectStorage
     {
         public:

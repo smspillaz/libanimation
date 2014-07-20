@@ -37,7 +37,7 @@ namespace wobbly
             PointView (std::array <NTM, N> &points,
                        std::size_t         index) :
                 array (points.data ()),
-                offset (index)
+                offset (index * 2)
             {
             }
 
@@ -46,14 +46,14 @@ namespace wobbly
             PointView (std::array <NTM, N> const &points,
                        std::size_t               index) :
                 array (points.data ()),
-                offset (index)
+                offset (index * 2)
             {
             }
 
             PointView (NTM         *points,
                        std::size_t index) :
                 array (points),
-                offset (index)
+                offset (index * 2)
             {
             }
 
