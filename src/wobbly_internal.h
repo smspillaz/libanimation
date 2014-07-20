@@ -20,6 +20,8 @@
 #include <boost/geometry/geometry.hpp>
 #include <boost/optional.hpp>
 
+#include <smspillaz/wobbly/wobbly.h>
+
 namespace boost
 {
     namespace geometry
@@ -67,6 +69,8 @@ namespace wobbly
                     Vector distance);
             Spring (Spring &&spring) noexcept;
             ~Spring ();
+
+            Spring & operator= (Spring &&spring) noexcept (true);
 
             Spring (Spring const &spring) = delete;
             Spring & operator= (Spring const &spring) = delete;
@@ -293,6 +297,103 @@ namespace wobbly
             MeshArray velocities;
     };
 
+    class Anchor::Lifetime
+    {
+    public:
+
+        virtual ~Lifetime () {};
+
+        bool operator== (Lifetime const &other) const
+        {
+            return SameAs (other);
+        }
+
+        bool operator!= (Lifetime const &other) const
+        {
+            return !(*this == other);
+        }
+
+    private:
+        virtual bool SameAs (Lifetime const &other) const = 0;
+    };
+
+    class AnchorPackage :
+        public Anchor::Lifetime
+    {
+        public:
+
+            AnchorPackage (Point              const &grabPoint,
+                           MeshArray                &positions,
+                           MeshArray                &forces,
+                           size_t                   first,
+                           size_t                   second) :
+                firstSpring (wobbly::PointView <double> (forces, first),
+                             wobbly::PointView <double> (mForces, 0),
+                             wobbly::PointView <double> (positions, second),
+                             wobbly::PointView <double> (mPositions, 0),
+                             Delta (grabPoint, positions, first)),
+                secondSpring (wobbly::PointView <double> (forces, second),
+                              wobbly::PointView <double> (mForces, 1),
+                              wobbly::PointView <double> (positions, second),
+                              wobbly::PointView <double> (mPositions, 1),
+                              Delta (grabPoint, positions, second))
+            {
+                mPositions.fill (0);
+                mForces.fill (0);
+            }
+
+            AnchorPackage (AnchorPackage &&package) noexcept (true):
+                mPositions (std::move (package.mPositions)),
+                mForces (std::move (package.mForces)),
+                firstSpring (std::move (package.firstSpring)),
+                secondSpring (std::move (package.secondSpring))
+            {
+            }
+
+            AnchorPackage &
+            operator= (AnchorPackage &&other) noexcept (true)
+            {
+                if (this == &other)
+                    return *this;
+
+                mPositions = std::move (other.mPositions);
+                mForces = std::move (other.mForces);
+                firstSpring = std::move (other.firstSpring);
+                secondSpring = std::move (other.secondSpring);
+
+                return *this;
+            }
+
+            ~AnchorPackage () noexcept (true)
+            {
+            }
+
+        private:
+
+            bool SameAs (Lifetime const &lifetime) const
+            {
+                return static_cast <Lifetime const *> (this) == &lifetime;
+            }
+
+            Vector Delta (Point     const &installationPoint,
+                          MeshArray const &positions,
+                          size_t          index)
+            {
+                wobbly::PointView <double const> gridPoint (positions, index);
+
+                Vector distance;
+                bg::assign (distance, gridPoint);
+                bg::subtract_point (distance, installationPoint);
+                return distance;
+            }
+
+            std::array <double, 4> mPositions;
+            std::array <double, 4> mForces;
+
+            wobbly::Spring firstSpring;
+            wobbly::Spring secondSpring;
+    };
+
     class SpringMesh
     {
         public:
@@ -302,12 +403,16 @@ namespace wobbly
 
             struct CalculationResult
             {
-                bool                        forcesExist;
+                bool            forcesExist;
                 MeshArray const &forces;
             };
 
             CalculationResult CalculateForces (double springConstant) const;
             void Scale (Vector const &scaleFactor);
+
+            Anchor::LTH
+            InstallAnchorSprings (Point     const &installationPoint,
+                                  MeshArray       &positions);
 
         private:
 
@@ -317,7 +422,9 @@ namespace wobbly
             MeshArray mutable    mForces;
             std::vector <Spring> mSprings;
 
-            Vector                        mSpringDimensions;
+            Vector               mSpringDimensions;
+
+            std::vector <AnchorPackage> mAnchorSprings;
 
             void DistributeSprings (MeshArray &array);
     };
@@ -342,6 +449,14 @@ namespace wobbly
             void Scale (Vector const &scaleFactor)
             {
                 mesh.Scale (scaleFactor);
+            }
+
+            Anchor::LTH
+            InstallAnchorSprings (Point     const &installationPoint,
+                                  MeshArray       &positions)
+            {
+                return mesh.InstallAnchorSprings (installationPoint,
+                                                  positions);
             }
 
             bool operator () (MeshArray         &positions,

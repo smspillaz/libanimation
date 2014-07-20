@@ -11,21 +11,46 @@
 
 namespace em = emscripten;
 
+static void SetSpringConstant (double springK)
+{
+    wobbly::Model::DefaultSettings.springConstant = springK;
+}
+
+static void SetFriction (double friction)
+{
+    wobbly::Model::DefaultSettings.friction = friction;
+}
+
+static void SetMaximumRange (double maximumRange)
+{
+    wobbly::Model::DefaultSettings.maximumRange = maximumRange;
+}
+
 EMSCRIPTEN_BINDINGS (wobbly)
 {
+    em::function ("SetSpringConstant", &SetSpringConstant);
+    em::function ("SetFriction", &SetFriction);
+    em::function ("SetMaximumRange", &SetMaximumRange);
+
     em::value_object <wobbly::Point> ("WobblyPoint")
         .field ("x", &wobbly::Point::x)
         .field ("y", &wobbly::Point::y);
-
-    em::class_ <wobbly::Object::AnchorGrab> ("WobblyAnchor")
-        .constructor <wobbly::ImmediatelyMovablePosition &, unsigned int> ()
-        .function ("MoveBy", &wobbly::Object::AnchorGrab::MoveBy);
+/*
+    em::value_object <wobbly::Model::Settings> ("WobblyModelSettings")
+        .field ("springConstant", &wobbly::Model::Settings::springConstant)
+        .field ("friction", &wobbly::Model::Settings::friction)
+        .field ("maximumRange", &wobbly::Model::Settings::maximumRange);
+*/
+    em::class_ <wobbly::Anchor> ("WobblyAnchor")
+        .function ("MoveBy", &wobbly::Anchor::MoveBy);
 
     em::class_ <wobbly::Model> ("WobblyModel")
-        .constructor <wobbly::Point, float, float> ()
+        .constructor <wobbly::Point,
+                      float,
+                      float> ()
         .function ("MoveModelBy", &wobbly::Model::MoveModelBy)
         .function ("MoveModelTo", &wobbly::Model::MoveModelTo)
-        .function ("StepModel", &wobbly::Model::StepModel)
+        .function ("Step", &wobbly::Model::Step)
         .function ("DeformTexcoords", &wobbly::Model::DeformTexcoords)
         .function ("GrabAnchor", &wobbly::Model::GrabAnchor);
 }

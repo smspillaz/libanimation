@@ -23,58 +23,89 @@ namespace wobbly
     namespace bg = boost::geometry;
 
     template <typename NumericType>
-    struct PointView
+    class PointView
     {
-        typedef NumericType NT;
-        typedef typename std::remove_const <NumericType>::type NTM;
-        typedef typename std::add_const <NumericType>::type NTC;
+        public:
 
-        typedef typename std::is_const <NT> IC;
+            typedef NumericType NT;
+            typedef typename std::remove_const <NumericType>::type NTM;
+            typedef typename std::add_const <NumericType>::type NTC;
 
-        template <std::size_t N>
-        PointView (std::array <NTM, N> &points,
-                   std::size_t         index) :
-            x (points.at (index * 2)),
-            y (points.at (index * 2 + 1))
-        {
-        }
+            typedef typename std::is_const <NT> IC;
 
-        template <std::size_t N,
-                  typename = typename std::enable_if <IC::value && N>::type>
-        PointView (std::array <NTM, N> const &points,
-                   std::size_t               index) :
-            x (points.at (index * 2)),
-            y (points.at (index * 2 + 1))
-        {
-        }
+            template <std::size_t N>
+            PointView (std::array <NTM, N> &points,
+                       std::size_t         index) :
+                array (points.data ()),
+                offset (index)
+            {
+            }
 
-        PointView (NTM         *points,
-                   std::size_t index) :
-            x (points[index * 2]),
-            y (points[index * 2 + 1])
-        {
-        }
+            template <std::size_t N,
+                      typename = typename std::enable_if <IC::value && N>::type>
+            PointView (std::array <NTM, N> const &points,
+                       std::size_t               index) :
+                array (points.data ()),
+                offset (index)
+            {
+            }
 
-        PointView (PointView <NumericType> &&view) :
-            x (view.x),
-            y (view.y)
-        {
-        }
+            PointView (NTM         *points,
+                       std::size_t index) :
+                array (points),
+                offset (index)
+            {
+            }
 
-        PointView (PointView <NumericType> const &p) = delete;
-        PointView & operator= (PointView <NumericType> const &p) = delete;
+            PointView (PointView <NumericType> &&view) :
+                array (view.array),
+                offset (view.offset)
+            {
+            }
 
-        /* cppcheck thinks this is a constructor, so we need to suppress
-         * a constructor warning here.
-         */
-        // cppcheck-suppress uninitMemberVar
-        operator PointView <NTC> ()
-        {
-            return PointView <NTC> (&this->x, 0);
-        }
+            PointView &
+            operator= (PointView <NumericType> &&view) noexcept
+            {
+                if (this == &view)
+                    return *this;
 
-        NumericType &x;
-        NumericType &y;
+                array = view.array;
+                offset = view.offset;
+
+                return *this;
+            }
+
+            PointView (PointView <NumericType> const &p) = delete;
+            PointView & operator= (PointView <NumericType> const &p) = delete;
+
+            /* cppcheck thinks this is a constructor, so we need to suppress
+             * a constructor warning here.
+             */
+            // cppcheck-suppress uninitMemberVar
+            operator PointView <NTC> ()
+            {
+                return PointView <NTC> (array, offset);
+            }
+
+            template <size_t Offset>
+            NumericType get () const
+            {
+                static_assert (Offset < 2, "Offset must be < 2");
+                return array[offset + Offset];
+            }
+
+            template <size_t Offset>
+            typename std::enable_if <!(IC::value) && (Offset + 1), void>::type
+            set (NumericType value)
+            {
+                static_assert (Offset < 2, "Offset must be < 2");
+                array[offset + Offset] = value;
+            }
+
+        private:
+
+            NumericType *array;
+            size_t      offset;
     };
 
     struct Point
@@ -119,23 +150,66 @@ namespace wobbly
     typedef Point Vector;
 }
 
-BOOST_GEOMETRY_REGISTER_POINT_2D (wobbly::PointView <double>,
-                                  double,
-                                  wobbly::bg::cs::cartesian, x, y)
-
-BOOST_GEOMETRY_REGISTER_POINT_2D_CONST (wobbly::PointView <double const>,
-                                        double,
-                                        wobbly::bg::cs::cartesian, x, y)
-
 BOOST_GEOMETRY_REGISTER_POINT_2D (wobbly::Point,
                                   double,
                                   wobbly::bg::cs::cartesian, x, y)
+
+BOOST_GEOMETRY_REGISTER_POINT_2D_GET_SET (wobbly::PointView <double>,
+                                          double,
+                                          wobbly::bg::cs::cartesian,
+                                          wobbly::PointView <double>::get <0>,
+                                          wobbly::PointView <double>::get <1>,
+                                          wobbly::PointView <double>::set <0>,
+                                          wobbly::PointView <double>::set <1>);
+
+/* Register the const-version of PointView. We are not using the
+ * provided macro as non exists for a const-version */
+namespace boost
+{
+    namespace geometry
+    {
+        namespace traits
+        {
+            namespace wobbly
+            {
+                typedef ::wobbly::PointView <double const> DPV;
+            }
+
+            BOOST_GEOMETRY_DETAIL_SPECIALIZE_POINT_TRAITS (wobbly::DPV,
+                                                           2,
+                                                           double,
+                                                           cs::cartesian);
+
+            template <>
+            struct access <wobbly::DPV, 0>
+            {
+                static inline double get (wobbly::DPV const &p)
+                {
+                    return p.template get <0> ();
+                }
+            };
+
+            template <>
+            struct access <wobbly::DPV, 1>
+            {
+                static inline double get (wobbly::DPV const &p)
+                {
+                    return p.template get <1> ();
+                }
+            };
+        }
+    }
+}
 
 namespace wobbly
 {
     class Anchor
     {
         public:
+
+             class Lifetime;
+             typedef std::unique_ptr <Lifetime,
+                                      std::function <void (Lifetime *)> > LTH;
 
              class Storage
              {
@@ -147,6 +221,7 @@ namespace wobbly
              };
 
              Anchor (wobbly::PointView <double> &&point,
+                     LTH                        &&lifetime,
                      Storage                    &storage,
                      size_t                     index);
              ~Anchor ();
@@ -225,7 +300,7 @@ namespace wobbly
             static constexpr double Mass = 15.0f;
             static constexpr double Friction = 3.0f;
 
-            static Settings const DefaultSettings;
+            static Settings DefaultSettings;
 
         private:
 

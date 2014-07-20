@@ -81,31 +81,39 @@ namespace wobbly
 {
     struct Anchor::Private
     {
-        Private (PointView <double> &&position,
-                 Anchor::Storage    &anchors,
-                 size_t             index);
+        Private (PointView <double>  &&position,
+                 LTH                 &&lifetime,
+                 Anchor::Storage     &anchors,
+                 size_t              index);
         ~Private ();
 
-        PointView <double>  position;
-        Anchor::Storage     &anchors;
-        size_t              index;
+        PointView <double>              position;
+        LTH lifetime;
+        Anchor::Storage                 &anchors;
+        size_t                          index;
     };
 }
 
-wobbly::Anchor::Private::Private (PointView <double>      &&position,
-                                  Storage                 &anchors,
-                                  size_t                  index) :
+wobbly::Anchor::Private::Private (PointView <double> &&position,
+                                  LTH                &&lifetime,
+                                  Anchor::Storage    &anchors,
+                                  size_t             index) :
     position (std::move (position)),
+    lifetime (std::move (lifetime)),
     anchors (anchors),
     index (index)
 {
     anchors.Lock (index);
 }
 
-wobbly::Anchor::Anchor (PointView <double>      &&position,
-                        Storage                 &anchors,
-                        size_t                  index) :
-    priv (new Private (std::move (position), anchors, index))
+wobbly::Anchor::Anchor (PointView <double> &&position,
+                        LTH                &&lifetime,
+                        Storage            &anchors,
+                        size_t            index) :
+    priv (new Private (std::move (position),
+                       std::move (lifetime),
+                       anchors,
+                       index))
 {
 }
 
@@ -149,6 +157,21 @@ wobbly::Spring::Spring (Spring &&spring) noexcept :
     posB (std::move (spring.posB)),
     desiredDistance (std::move (spring.desiredDistance))
 {
+}
+
+wobbly::Spring &
+wobbly::Spring::operator= (wobbly::Spring &&other) noexcept (true)
+{
+    if (this == &other)
+        return *this;
+
+    forceA = std::move (other.forceA);
+    forceB = std::move (other.forceB);
+    posA = std::move (other.posA);
+    posB = std::move (other.posB);
+    desiredDistance = std::move (other.desiredDistance);
+
+    return *this;
 }
 
 wobbly::Spring::~Spring ()
@@ -223,6 +246,53 @@ wobbly::SpringMesh::Scale (Vector const &scaleFactor)
 
     for (Spring &spring : mSprings)
         spring.ScaleLength (scaleFactor);
+}
+
+wobbly::Anchor::LTH
+wobbly::SpringMesh::InstallAnchorSprings (Point     const &installationPoint,
+                                          MeshArray       &positions)
+{
+    double firstDistanceScalar = 0;
+    double secondDistanceScalar = 0;
+
+    size_t firstIndex = 0;
+    size_t secondIndex = 0;
+
+    for (size_t i = 0; i < config::TotalIndices; ++i)
+    {
+        wobbly::PointView <double> pv (positions, i);
+        double distance = bg::distance (pv, installationPoint);
+
+        if (distance > firstDistanceScalar)
+        {
+            firstIndex = i;
+            firstDistanceScalar = distance;
+        }
+        else if (distance > secondDistanceScalar)
+        {
+            secondIndex = i;
+            secondDistanceScalar = distance;
+        }
+    }
+
+    mAnchorSprings.emplace_back (installationPoint,
+                                 positions,
+                                 mForces,
+                                 firstIndex,
+                                 secondIndex);
+
+    typedef Anchor::LTH LTH;
+    return LTH (&(mAnchorSprings.back ()),
+                [this](Anchor::Lifetime *lifetime) {
+                    auto condition = [lifetime](AnchorPackage const &p) ->bool {
+                        return *lifetime == p;
+                    };
+                    auto it = std::remove_if (std::begin (mAnchorSprings),
+                                              std::end (mAnchorSprings),
+                                              condition);
+
+                    mAnchorSprings.erase (it);
+                });
 }
 
 namespace wobbly
@@ -311,7 +381,7 @@ wobbly::Model::Private::Private (Point    const &initialPosition,
                             TileSize ());
 }
 
-wobbly::Model::Settings const wobbly::Model::DefaultSettings =
+wobbly::Model::Settings wobbly::Model::DefaultSettings =
 {
     wobbly::Model::DefaultSpringConstant,
     wobbly::Model::Friction,
@@ -500,7 +570,11 @@ wobbly::Model::GrabAnchor (Point const &position)
     /* Bets are off once we've grabbed an anchor, the model is now unequal */
     priv->mCurrentlyUnequal = true;
 
+    auto &positions (priv->mPositions.PointArray ());
+    auto lifetime (priv->mSpring.InstallAnchorSprings (position,
+                                                       positions));
     return Anchor (wobbly::PointView <double> (points, index),
+                   std::move (lifetime),
                    priv->mAnchors,
                    index);
 }

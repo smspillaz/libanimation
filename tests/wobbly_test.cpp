@@ -364,11 +364,30 @@ namespace
             MOCK_METHOD1 (Unlock, void (size_t));
     };
 
+    class StubLifetime :
+        public wobbly::Anchor::Lifetime
+    {
+        private:
+
+            bool SameAs (Lifetime const &lifetime) const override
+            {
+                return static_cast <Lifetime const *> (this) == &lifetime;
+            }
+    };
+
     class Anchor :
         public Test
     {
         public:
 
+            wobbly::Anchor::LTH Handle (StubLifetime &lifetime)
+            {
+                return wobbly::Anchor::LTH (&lifetime,
+                                            [](wobbly::Anchor::Lifetime *) {
+                                            });
+            }
+
+            StubLifetime            lifetime;
             MockAnchorStorage       anchorStorage;
             SingleObjectStorage     object;
     };
@@ -378,13 +397,19 @@ namespace
         size_t const index = 0;
         EXPECT_CALL (anchorStorage, Lock (index)).Times (1);
 
-        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchor (object.Position (),
+                               Handle (lifetime),
+                               anchorStorage,
+                               index);
     }
 
     TEST_F (Anchor, DestructionUnlocksWithIndex)
     {
         size_t const index = 0;
-        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchor (object.Position (),
+                               Handle (lifetime),
+                               anchorStorage,
+                               index);
 
         EXPECT_CALL (anchorStorage, Unlock (index)).Times (1);
     }
@@ -392,7 +417,10 @@ namespace
     TEST_F (Anchor, MoveConstructorNoThrow)
     {
         size_t const index = 0;
-        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchor (object.Position (),
+                               Handle (lifetime),
+                               anchorStorage,
+                               index);
 
         EXPECT_NO_THROW ({
             wobbly::Anchor anchorNext (std::move (anchor));
@@ -402,7 +430,10 @@ namespace
     TEST_F (Anchor, UnlockNotCalledMultipleTimesAfterMove)
     {
         size_t const index = 0;
-        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchor (object.Position (),
+                               Handle (lifetime),
+                               anchorStorage,
+                               index);
         wobbly::Anchor anchorNext (std::move (anchor));
 
         EXPECT_CALL (anchorStorage, Unlock (index)).Times (1);
@@ -411,7 +442,10 @@ namespace
     TEST_F (Anchor, MoveByCausesPositionToMove)
     {
         size_t const index = 0;
-        wobbly::Anchor anchor (object.Position (), anchorStorage, index);
+        wobbly::Anchor anchor (object.Position (),
+                               Handle (lifetime),
+                               anchorStorage,
+                               index);
 
         wobbly::Point const movement (100, 100);
         anchor.MoveBy (movement);
