@@ -1423,14 +1423,17 @@ namespace
                 os << " within :" << std::endl;
                 bg::model::polygon <wobbly::Point> poly;
                 bg::assign (poly, parent);
-                bg::for_each_point (poly, PrintPoint (os));
+                bg::for_each_point (poly, PrintPoint (&os));
             }
 
+            /* FIXME: Older versions of boost::geometry like to copy
+             * visitors, which means that std::ostream *os can't be
+             * a reference */
             class PrintPoint
             {
                 public:
 
-                    PrintPoint (std::ostream &os) :
+                    PrintPoint (std::ostream *os) :
                         os (os)
                     {
                     }
@@ -1438,12 +1441,12 @@ namespace
                     template <typename Point>
                     void operator () (Point const &p)
                     {
-                        os << " - " << p << std::endl;
+                        *os << " - " << p << std::endl;
                     }
 
                 private:
 
-                   std::ostream &os;
+                   std::ostream *os;
             };
 
             ParentGeometry parent;
@@ -1458,6 +1461,61 @@ namespace
     }
 
     typedef bg::model::box <wobbly::Point> PointBox;
+
+    TYPED_TEST (SpringBezierModelAnchorStrategy, EntireModelMovesWhileGrabbed)
+    {
+        /* Create an anchor at the midpoint, move it by 100, 100 and then move
+         * the entire model backwards by 100, 100. The result should be that
+         * the model's topleft most extreme will be around 0, 0. We will move the
+         * entire backwards and anchor by one step along the way and integrate each
+         * time, ensuring that integration has no effect on movement.
+         *
+         * Because the model is automatically snapped back to its target position
+         * as soon as integration is complete, we'll need to do the same on two
+         * models and calculate how many integrations are required to get the model
+         * to settle. We'll apply n - 1 integrations to the second and then test it.
+         */
+        wobbly::Vector const grabPoint (TextureWidth / 2, TextureHeight / 2);
+         
+        wobbly::Model referenceModel (wobbly::Vector (0, 0),
+                                      TextureWidth,
+                                      TextureHeight);
+
+        wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
+        wobbly::Anchor referenceGrab (this->createAnchorFor (referenceModel,
+                                                             grabPoint));
+        
+        size_t const distance = 100;
+        
+        for (size_t i = 0; i < distance; ++i)
+        {
+            float const positive = 1;
+            float const negative = static_cast <float> (positive) * -1.0;
+        
+            grab->MoveBy (wobbly::Vector (positive, positive));
+            this->model.MoveModelBy (wobbly::Vector (negative, negative));
+            while (this->model.Step (1));
+            
+            referenceGrab->MoveBy (wobbly::Vector (positive, positive));
+            referenceModel.MoveModelBy (wobbly::Vector (negative, negative));
+            while (referenceModel.Step (1));
+        }
+        
+        /* Complete steps on reference model, but track how long it takes */
+        size_t requiredStepsToSettle = 0;
+        
+        while (referenceModel.Step (1))
+            ++requiredStepsToSettle;
+        
+        /* Step test-against model for requiredStepsToSettle - 1 */
+        while (--requiredStepsToSettle)
+            this->model.Step (1);
+
+        /* Slightly higher range */
+        EXPECT_THAT (this->model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (-2.0, -2.0),
+                                               wobbly::Point (2.0, 2.0))));
+    }
 
     /* The only way we can test this is to perform operations dependent
      * on a target position and ensure that they are precise to the grab's
@@ -1478,6 +1536,30 @@ namespace
         /* Wait until the model has completely settled */
         while (this->model.Step (1));
 
+        EXPECT_THAT (this->model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
+                                               wobbly::Point (1.5, 1.5))));
+    }
+    
+    TYPED_TEST (SpringBezierModelAnchorStrategy, ConsistentMovementManyGrabs)
+    {
+        /* Create an anchor on 0, 0 and then move it to 100, 100, then move
+         * it back to 0, 0. The end result should be that the model position
+         * will end up back at 0, 0. We can't observe the target positions
+         * so we need to do it this way */
+        for (size_t i = 0; i < 5; ++i)
+        {
+            this->model.MoveModelTo (wobbly::Point (0, 0));
+            wobbly::Vector const grabPoint (0, 0);
+            wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
+
+            grab->MoveBy (wobbly::Point (100, 100));
+            this->model.MoveModelTo (wobbly::Point (0, 0));
+
+            /* Wait until the model has completely settled */
+            while (this->model.Step (1));
+        }
+    
         EXPECT_THAT (this->model.Extremes ()[0],
                      WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
                                                wobbly::Point (1.5, 1.5))));
@@ -2080,7 +2162,7 @@ namespace
         wobbly::Point const movement (range * 2, 0);
         auto handleOwner (targets.Activate ());
         wobbly::MoveOnly <wobbly::TargetMesh::Move> &handleWrap (handleOwner);
-        wobbly::TargetMesh::Move moveBy (handleWrap);
+        wobbly::TargetMesh::Move const &moveBy (handleWrap);
 
         moveBy (movement);
 

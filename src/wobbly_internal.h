@@ -199,6 +199,52 @@ namespace wobbly
         }
     }
 
+    class ObjectIdentifier
+    {
+        public:
+
+            /* Disable copy, enable move */
+            ObjectIdentifier (size_t internal) :
+                id (internal)
+            {
+            }
+
+            ObjectIdentifier (ObjectIdentifier &&other) noexcept (true) :
+                id (other.id)
+            {
+                Nullify (other);
+            }
+
+            ObjectIdentifier & operator= (ObjectIdentifier &&other) noexcept (true)
+            {
+                id = std::move (other.id);
+                Nullify (other);
+                return *this;
+            }
+
+            bool operator== (ObjectIdentifier const &other) const
+            {
+                return this->id == other.id;
+            }
+
+            bool operator!= (ObjectIdentifier const &other) const
+            {
+                return !(*this == other);
+            }
+
+        public:
+
+            ObjectIdentifier (ObjectIdentifier const &other) = delete;
+            ObjectIdentifier & operator= (ObjectIdentifier const &other) = delete;
+
+            static void Nullify (ObjectIdentifier &id)
+            {
+                id.id = 0;
+            }
+
+            size_t id;
+    };
+
     class Spring
     {
         public:
@@ -239,50 +285,7 @@ namespace wobbly
                 return forceB;
             }
 
-            class ID
-            {
-                public:
-                    /* Disable copy, enable move */
-                    ID (size_t internal) :
-                        id (internal)
-                    {
-                    }
-
-                    ID (ID &&other) noexcept (true) :
-                        id (other.id)
-                    {
-                        Nullify (other);
-                    }
-
-                    ID & operator= (ID &&other) noexcept (true)
-                    {
-                        id = std::move (other.id);
-                        Nullify (other);
-                        return *this;
-                    }
-
-                    bool operator== (ID const &other) const
-                    {
-                        return this->id == other.id;
-                    }
-
-                    bool operator!= (ID const &other) const
-                    {
-                        return !(*this == other);
-                    }
-
-                private:
-
-                    ID (ID const &other) = delete;
-                    ID & operator= (ID const &other) = delete;
-
-                    static void Nullify (ID &id)
-                    {
-                        id.id = 0;
-                    }
-
-                    size_t id;
-            };
+            typedef wobbly::ObjectIdentifier ID;
 
             bool HasID (ID const &candidateId) const
             {
@@ -436,9 +439,11 @@ namespace wobbly
     {
     };
 
+    /* FIXME: Version 4.7.3 of g++ is broken and will not detect
+     * std::function's default constructor as noexcept */
     template <typename T>
     struct NothrowDefaultCtorable :
-        public std::is_nothrow_default_constructible <T>
+        public std::is_default_constructible <T>
     {
     };
 
@@ -661,7 +666,13 @@ namespace wobbly
                  handle (std::move (handle)),
                  strategy (std::forward <Args> (args)...)
              {
+                std::cout << "Anchor taken" << std::endl;
              }
+             
+             ~ConstrainingAnchor () noexcept (true)
+             {
+                 std::cout << "Anchor returned" << std::endl;
+             };
 
              void MoveBy (Point const &delta) noexcept (true)
              {
@@ -900,6 +911,7 @@ namespace wobbly
                                                           std::move (posA),
                                                           std::move (posB),
                                                           distance);
+                        std::cout << "Create spring between " << bg::get <0> (posA) << " and " << bg::get <0> (posB) << std::endl;
 
                         mSprings.emplace_back (std::move (package.spring));
 
@@ -933,12 +945,70 @@ namespace wobbly
                     std::vector <Spring>     mSprings;
                     std::vector <Spring::ID> mPending;
             };
+            
+            class AnchorDataVector
+            {
+                public:
+                
+                    typedef ObjectIdentifier ID;
+                    
+                    TemporaryOwner <ID>
+                    EmplaceAndTrack (PointView <double> &&point)
+                    {
+                        size_t index = mNextIndex++;
+                        
+                        PointViewTracking tracking {
+                                                       std::move (point),
+                                                       ID (index)
+                                                   };
+                        mPoints.push_back (std::move (tracking));
+                        
+                        auto revert = [this](ID &&id) {
+                            auto const predicate =
+                                [this, &id](PointViewTracking const &tracking) {
+                                    return tracking.id == id;
+                                };
+                            
+                            auto exists =
+                                std::remove_if (std::begin (mPoints),
+                                                std::end (mPoints),
+                                                predicate);
+                           
+                            mPoints.erase (exists, std::end (mPoints));
+                        };
+                        
+                        TemporaryOwner <ID> tmp (ID (index), revert);
+                    }
+                    
+                    void MoveBy (wobbly::Vector const &delta)
+                    {
+                        for (auto &p : mPoints)
+                            bg::add_point (p, delta);
+                    }
+
+                private:
+                
+                    struct PointViewTracking
+                    {
+                        ID                 id;
+                        PointView <double> point;
+                    };
+
+                    std::vector <PointView <double>> mPoints;
+                    size_t                           mNextIndex;
+            };
 
             typedef PointView <double const> DCPV;
             typedef std::function <DCPV (Spring const &)> PosPreference;
 
             struct InstallResult
             {
+                struct InsertedSpring
+                {
+                    TemporaryOwner <Spring::ID> spring;
+                    TemporaryOwner <AnchorDataVector::ID> anchor;
+                }
+            
                 TemporaryOwner <Spring> stolen;
                 TemporaryOwner <Spring::ID> first;
                 TemporaryOwner <Spring::ID> second;
@@ -946,9 +1016,14 @@ namespace wobbly
             };
 
             InstallResult
-            InstallAnchorSprings (Point              const &installationPoint,
+            InstallAnchorSprings (Point         const &installationPoint,
                                   PosPreference const &firstPref,
                                   PosPreference const &secondPref);
+                                  
+            void MoveInsertedAnchorsBy (wobbly::Vector const &delta)
+            {
+                mInsertedAnchors.MoveBy (delta);
+            }
 
         private:
 
@@ -957,6 +1032,7 @@ namespace wobbly
 
             MeshArray mutable    mForces;
             SpringVector         mSprings;
+            AnchorDataVector     mInsertedAnchors;
     };
 
     template <typename IntegrationStrategy>
@@ -1161,6 +1237,8 @@ wobbly::Spring::ApplyForces (double springConstant) const
     Vector delta (geometry::Absolute (deltaA));
     bg::add_point (delta, geometry::Absolute (deltaB));
 
+    //std::cout << "id " << id.id << " posA " << bg::get <0> (posA) << " " << bg::get <1> (posA) << " posB " << bg::get <0> (posB) << " " << bg::get <1> (posB) << std::endl;
+
     bool result = bg::get <0> (delta) > 0.00 ||
                   bg::get <1> (delta) > 0.00;
 
@@ -1177,6 +1255,7 @@ wobbly::SpringMesh::CalculateForces (double springConstant) const
     /* Accumulate force on each end of each spring. Some points are endpoints
      * of multiple springs so these functions may cause a force to be updated
      * multiple (different) times */
+    //std::cout << "Applying forces\n";
     mSprings.Each ([&more, &springConstant](Spring const &spring) {
         more |= spring.ApplyForces (springConstant);
     });
@@ -1247,6 +1326,7 @@ wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
     }
 
     Point absolutePosition (x, y);
+    //std::cout << "Deformed: " << bg::get <0> (absolutePosition) <<  " " << bg::get <1> (absolutePosition) << std::endl;
     return absolutePosition;
 }
 

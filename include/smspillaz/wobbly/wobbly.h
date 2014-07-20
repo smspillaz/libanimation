@@ -164,25 +164,25 @@ namespace wobbly
 
     struct Point
     {
-        Point (double x, double y) :
+        Point (double x, double y) noexcept (true) :
             x (x),
             y (y)
         {
         }
 
-        Point () :
+        Point () noexcept (true) :
             x (0),
             y (0)
         {
         }
 
-        Point (Point const &p) :
+        Point (Point const &p) noexcept (true) :
             x (p.x),
             y (p.y)
         {
         }
 
-        void swap (Point &a, Point &b)
+        void swap (Point &a, Point &b) noexcept (true)
         {
             using std::swap;
 
@@ -190,7 +190,7 @@ namespace wobbly
             swap (a.y, b.y);
         }
 
-        Point & operator= (Point other)
+        Point & operator= (Point other) noexcept (true)
         {
             swap (*this, other);
 
