@@ -21,6 +21,7 @@ include (PolysquareCommon)
 find_package (Boost REQUIRED)
 
 polysquare_compiler_bootstrap ()
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 polysquare_rules_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH}
                             ${CMAKE_BINARY_DIR})
 polysquare_gmock_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})

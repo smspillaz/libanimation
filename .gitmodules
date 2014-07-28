@@ -1,3 +1,6 @@
 [submodule "cmake/common"]
 	path = cmake/common
 	url = git://github.com/polysquare/common-universal-cmake
+[submodule "include/third_party/allow_move_optional"]
+	path = include/third_party/allow_move_optional
+	url = git://github.com/hostilefork/CopyMoveConstrainedOptional

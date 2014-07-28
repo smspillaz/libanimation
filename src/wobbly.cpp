@@ -49,6 +49,7 @@
  * The original implementation of this for Compiz is
  * Copyright (c) 2005 David Reveman
  */
+#include <functional>
 #include <limits>
 
 /* boost/geometry/strategies/cartesian/distance_pythagoras depends on
@@ -59,7 +60,6 @@
 #include <boost/geometry/algorithms/distance.hpp>
 #include <boost/geometry/arithmetic/arithmetic.hpp>
 #include <boost/geometry/strategies/cartesian/distance_pythagoras.hpp>
-#include <boost/optional.hpp>
 
 #include <smspillaz/wobbly/wobbly.h>
 
@@ -137,17 +137,65 @@ wobbly::Anchor::MoveBy (Point const &delta)
     bg::add_point (priv->position, delta);
 }
 
-wobbly::Spring::Spring (PointView <double> &&forceA,
-                        PointView <double> &&forceB,
+namespace
+{
+    size_t NextSpringID ()
+    {
+        static size_t CurrentSpringID = 0;
+        return ++CurrentSpringID;
+    }
+}
+
+wobbly::Spring::Spring (PointView <double>       &&forceA,
+                        PointView <double>       &&forceB,
                         PointView <double const> &&posA,
                         PointView <double const> &&posB,
-                        Vector distance) :
+                        Vector                   distance,
+                        IDFetchStrategy    const &fetchID) :
     forceA (std::move (forceA)),
     forceB (std::move (forceB)),
     posA (std::move (posA)),
     posB (std::move (posB)),
-    desiredDistance (distance)
+    desiredDistance (distance),
+    id (fetchID ())
 {
+}
+
+wobbly::Spring::Spring (PointView <double>       &&forceA,
+                        PointView <double>       &&forceB,
+                        PointView <double const> &&posA,
+                        PointView <double const> &&posB,
+                        Vector             const &distance) :
+    Spring (std::move (forceA),
+            std::move (forceB),
+            std::move (posA),
+            std::move (posB),
+            distance,
+            std::bind (NextSpringID))
+{
+}
+
+wobbly::Spring::ConstructionPackage
+wobbly::Spring::CreateWithTrackingID (PointView<double>       &&forceA,
+                                      PointView<double>       &&forceB,
+                                      PointView<const double> &&posA,
+                                      PointView<const double> &&posB,
+                                      Vector            const &distance)
+{
+    size_t trackingID (NextSpringID ());
+    Spring spring (std::move (forceA),
+                   std::move (forceB),
+                   std::move (posA),
+                   std::move (posB),
+                   distance,
+                   [&trackingID]() {
+                       return trackingID;
+                   });
+
+    return {
+        std::move (spring),
+        ID (trackingID)
+    };
 }
 
 wobbly::Spring::Spring (Spring &&spring) noexcept :
@@ -155,7 +203,8 @@ wobbly::Spring::Spring (Spring &&spring) noexcept :
     forceB (std::move (spring.forceB)),
     posA (std::move (spring.posA)),
     posB (std::move (spring.posB)),
-    desiredDistance (std::move (spring.desiredDistance))
+    desiredDistance (std::move (spring.desiredDistance)),
+    id (std::move (spring.id))
 {
 }
 
@@ -170,6 +219,7 @@ wobbly::Spring::operator= (wobbly::Spring &&other) noexcept (true)
     posA = std::move (other.posA);
     posB = std::move (other.posB);
     desiredDistance = std::move (other.desiredDistance);
+    id = std::move (other.id);
 
     return *this;
 }
@@ -184,115 +234,252 @@ wobbly::Spring::ScaleLength (Vector scaleFactor)
     bg::multiply_point (desiredDistance, scaleFactor);
 }
 
-wobbly::SpringMesh::SpringMesh (MeshArray    &points,
-                                Vector const &springDimensions) :
-    mSpringDimensions (springDimensions)
+namespace
 {
-    DistributeSprings (points);
-}
-
-void
-wobbly::SpringMesh::DistributeSprings (MeshArray &points)
-{
-    double const springWidth = bg::get <0> (mSpringDimensions);
-    double const springHeight = bg::get <1> (mSpringDimensions);
-
-    size_t const nSprings = SpringCountForGridSize (config::Width,
-                                                    config::Height);
-
-    mSprings.clear ();
-    mSprings.reserve (nSprings);
-
-    for (size_t j = 0; j < config::Height; ++j)
+    std::vector <wobbly::Spring>
+    GenerateBaseSpringMesh (wobbly::MeshArray    &points,
+                            wobbly::MeshArray    &forces,
+                            wobbly::Vector const &springDimensions)
     {
-        for (size_t i = 0; i < config::Width; ++i)
+        using namespace wobbly;
+        std::vector <Spring> springs;
+
+        double const springWidth = ::bg::get <0> (springDimensions);
+        double const springHeight = ::bg::get <1> (springDimensions);
+
+        size_t const nSprings = SpringCountForGridSize (config::Width,
+                                                        config::Height);
+
+        springs.reserve (nSprings);
+
+        for (size_t j = 0; j < config::Height; ++j)
         {
-            typedef PointView <double> DPV;
-            typedef PointView <double const> CDPV;
-
-            size_t current = j * config::Width + i;
-            size_t below = (j + 1) * config::Width + i;
-            size_t right = j * config::Width + i + 1;
-
-            /* Spring from us to object below us */
-            if (j < config::Height - 1)
+            for (size_t i = 0; i < config::Width; ++i)
             {
-                mSprings.emplace_back (DPV (mForces, current),
-                                       DPV (mForces, below),
-                                       CDPV (points, current),
-                                       CDPV (points, below),
-                                       Vector (0.0, springHeight));
-            }
+                typedef PointView <double> DPV;
+                typedef PointView <double const> CDPV;
 
-            /* Spring from us to object right of us */
-            if (i < config::Width - 1)
-            {
-                mSprings.emplace_back (DPV (mForces, current),
-                                       DPV (mForces, right),
-                                       CDPV (points, current),
-                                       CDPV (points, right),
-                                       Vector (springWidth, 0.0f));
+                size_t current = j * config::Width + i;
+                size_t below = (j + 1) * config::Width + i;
+                size_t right = j * config::Width + i + 1;
+
+                /* Spring from us to object below us */
+                if (j < config::Height - 1)
+                {
+                    springs.emplace_back (DPV (forces, current),
+                                          DPV (forces, below),
+                                          CDPV (points, current),
+                                          CDPV (points, below),
+                                          Vector (0.0, springHeight));
+                }
+
+                /* Spring from us to object right of us */
+                if (i < config::Width - 1)
+                {
+                    springs.emplace_back (DPV (forces, current),
+                                          DPV (forces, right),
+                                          CDPV (points, current),
+                                          CDPV (points, right),
+                                          Vector (springWidth, 0.0f));
+                }
             }
         }
-    }
 
-    assert (mSprings.size () == nSprings);
+        assert (springs.size () == nSprings);
+
+        return std::move (springs);
+    }
+}
+
+wobbly::SpringMesh::SpringMesh (MeshArray    &points,
+                                Vector const &springDimensions) :
+    mSprings (GenerateBaseSpringMesh (points, mForces, springDimensions))
+{
 }
 
 void
 wobbly::SpringMesh::Scale (Vector const &scaleFactor)
 {
-    bg::multiply_point (mSpringDimensions, scaleFactor);
+    mSprings.Each ([&scaleFactor](Spring &spring) {
+                       spring.ScaleLength (scaleFactor);
+                   });
+}
 
-    for (Spring &spring : mSprings)
-        spring.ScaleLength (scaleFactor);
+namespace
+{
+    struct SpringSplitFinder
+    {
+        SpringSplitFinder (wobbly::Point                     const &install,
+                           wobbly::SpringMesh::SpringVector  const &vector) :
+            install (install),
+            primaryDistance (std::numeric_limits <double>::max ()),
+            secondaryDistance (std::numeric_limits <double>::max ())
+        {
+            vector.Each ([this](wobbly::Spring const &spring) {
+                            (*this) (spring);
+                        });
+        }
+
+        void operator() (wobbly::Spring const &spring)
+        {
+            double currentSpringPrimaryDistance =
+                bg::distance (spring.FirstPosition (), install);
+            if (currentSpringPrimaryDistance < primaryDistance)
+            {
+                primaryDistance = currentSpringPrimaryDistance;
+                secondaryDistance = std::numeric_limits <double>::max ();
+                springToSplit = spring;
+            }
+
+            /* Branch will be taken for any match of spring with
+             * best primary distance */
+            if (currentSpringPrimaryDistance == primaryDistance)
+            {
+                double currentSpringSecondaryDistance =
+                    bg::distance (spring.SecondPosition (), install);
+                if (currentSpringSecondaryDistance < secondaryDistance)
+                {
+                    springToSplit = spring;
+                    secondaryDistance = currentSpringSecondaryDistance;
+                }
+            }
+        }
+
+        operator wobbly::Spring const & () const
+        {
+            assert (springToSplit.is_initialized ());
+            return springToSplit.get ();
+        }
+
+        boost::optional <wobbly::Spring const &> springToSplit;
+
+        wobbly::Point const install;
+        double primaryDistance, secondaryDistance;
+    };
+}
+
+namespace
+{
+    class InsertedSprings :
+        public wobbly::Anchor::GrabStrategy
+    {
+        public:
+
+            typedef wobbly::TemporaryOwner <wobbly::Spring> StolenSpring;
+            typedef wobbly::TemporaryOwner <wobbly::Spring::ID> TemporarySpring;
+
+            InsertedSprings (StolenSpring               &&stolen,
+                             TemporarySpring            &&first,
+                             TemporarySpring            &&second,
+                             std::unique_ptr <double[]> &&data) :
+                stolen (std::move (stolen)),
+                first (std::move (first)),
+                second (std::move (second)),
+                data (std::move (data))
+            {
+            }
+
+            InsertedSprings (InsertedSprings &&package) noexcept (true):
+                stolen (std::move (package.stolen)),
+                first (std::move (package.first)),
+                second (std::move (package.second)),
+                data (std::move (package.data))
+            {
+            }
+
+            InsertedSprings &
+            operator= (InsertedSprings &&other) noexcept (true)
+            {
+                if (this == &other)
+                    return *this;
+
+                stolen = std::move (other.stolen);
+                first = std::move (other.first);
+                second = std::move (other.second);
+                data = std::move (other.data);
+
+                return *this;
+            }
+
+        private:
+
+            void MoveBy (wobbly::Point const &delta) override
+            {
+                wobbly::PointView <double> pv (data.get (), 0);
+                bg::add_point (pv, delta);
+            }
+
+            InsertedSprings (InsertedSprings const &) = delete;
+            InsertedSprings & operator= (InsertedSprings const &) = delete;
+
+            StolenSpring stolen;
+            TemporarySpring first;
+            TemporarySpring second;
+            std::unique_ptr <double[]> data;
+    };
 }
 
 wobbly::Anchor::LTH
-wobbly::SpringMesh::InstallAnchorSprings (Point     const &installationPoint,
-                                          MeshArray       &positions)
+wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
+                                          PosPreference const &firstPref,
+                                          PosPreference const &secondPref)
 {
-    double firstDistanceScalar = 0;
-    double secondDistanceScalar = 0;
+    Spring const &found (SpringSplitFinder (install, mSprings));
 
-    size_t firstIndex = 0;
-    size_t secondIndex = 0;
+    std::unique_ptr <double[]> data (new double[4]);
+    std::fill_n (data.get (), 4, 0);
+    wobbly::PointView <double> anchorView (data.get (), 0);
+    bg::assign (anchorView, install);
 
-    for (size_t i = 0; i < config::TotalIndices; ++i)
-    {
-        wobbly::PointView <double> pv (positions, i);
-        double distance = bg::distance (pv, installationPoint);
+    /* We always want the spring to *read* the first and second
+     * positions, although the positions for the purpose of
+     * determining the desired distance may be different */
+    PointView <double const> firstPoint (found.FirstPosition ());
+    PointView <double const> secondPoint (found.SecondPosition ());
+    PointView <double> firstForce (found.FirstForce ());
+    PointView <double> secondForce (found.SecondForce ());
 
-        if (distance > firstDistanceScalar)
-        {
-            firstIndex = i;
-            firstDistanceScalar = distance;
-        }
-        else if (distance > secondDistanceScalar)
-        {
-            secondIndex = i;
-            secondDistanceScalar = distance;
-        }
-    }
+    /* These two points represent an absolute position, which, when
+     * ths anchor position is subtracted, are the desired delta. */
+    PointView <double const> firstDesired (firstPref (found));
+    PointView <double const> secondDesired (secondPref (found));
 
-    mAnchorSprings.emplace_back (installationPoint,
-                                 positions,
-                                 mForces,
-                                 firstIndex,
-                                 secondIndex);
+    auto const insertSpring =
+        [this, &data](wobbly::PointView <double const> meshPoint,
+                      wobbly::PointView <double const> desiredPoint,
+                      wobbly::PointView <double>       meshForce) {
+            PointView <double const> anchorPoint (data.get (), 0);
+            PointView <double> anchorForce (data.get (), 1);
 
-    typedef Anchor::LTH LTH;
-    return LTH (&(mAnchorSprings.back ()),
-                [this](Anchor::Lifetime *lifetime) {
-                    auto condition = [lifetime](AnchorPackage const &p) ->bool {
-                        return *lifetime == p;
-                    };
-                    auto it = std::remove_if (std::begin (mAnchorSprings),
-                                              std::end (mAnchorSprings),
-                                              condition);
+            Vector delta;
+            bg::fixups::assign_point (delta, desiredPoint);
+            bg::fixups::subtract_point (delta, anchorPoint);
 
-                    mAnchorSprings.erase (it);
-                });
+            return mSprings.EmplaceAndTrack (std::move (anchorForce),
+                                             std::move (meshForce),
+                                             std::move (anchorPoint),
+                                             std::move (meshPoint),
+                                             delta);
+        };
+
+    /* Move out the split spring first */
+    TemporaryOwner <Spring> stolen =
+        mSprings.TakeMatching ([&found](Spring const &spring) {
+            return &spring == &found;
+        });
+
+    /* After this point, "found" is invalidated */
+    TemporaryOwner <Spring::ID> first (insertSpring (std::move (firstPoint),
+                                                     std::move (firstDesired),
+                                                     std::move (firstForce)));
+    TemporaryOwner <Spring::ID> second (insertSpring (std::move (secondPoint),
+                                                      std::move (secondDesired),
+                                                      std::move (secondForce)));
+
+    return Anchor::LTH (new InsertedSprings (std::move (stolen),
+                                             std::move (first),
+                                             std::move (second),
+                                             std::move (data)));
 }
 
 namespace wobbly
@@ -320,6 +507,9 @@ namespace wobbly
             /* Anchor - is the point locked or unlocked */
             AnchorArray                   mAnchors;
 
+            /* Estimated target positions, updated by anchors */
+            TargetMesh                    mTargets;
+
             /* Constrainment data for each point */
             ConstrainmentStep             mConstrainment;
 
@@ -332,33 +522,10 @@ namespace wobbly
             /* Velocity of the point on the grid */
             EulerIntegration              mVelocityIntegrator;
 
-            Model::Settings         const &mSettings;
+            Model::Settings        const &mSettings;
 
             bool mCurrentlyUnequal;
     };
-}
-
-namespace
-{
-    inline void
-    CalculatePositionArray (wobbly::Point  const &initialPosition,
-                            wobbly::MeshArray    &array,
-                            wobbly::Vector const &tileSize)
-    {
-        assert (array.size () == wobbly::config::ArraySize);
-
-        for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
-        {
-            size_t const row = i / wobbly::config::Width;
-            size_t const column = i % wobbly::config::Width;
-
-            wobbly::PointView <double> position (array, i);
-            bg::assign (position, initialPosition);
-            bg::add_point (position,
-                           wobbly::Point (column * bg::get <0> (tileSize),
-                                          row * bg::get <1> (tileSize)));
-        }
-    }
 }
 
 wobbly::Model::Private::Private (Point    const &initialPosition,
@@ -367,7 +534,13 @@ wobbly::Model::Private::Private (Point    const &initialPosition,
                                  Settings const &settings) :
     mWidth (width),
     mHeight (height),
-    mConstrainment (settings.maximumRange, mWidth, mHeight),
+    mTargets ([this](MeshArray &mesh) {
+                  auto target (TargetPosition ());
+                  mesh::CalculatePositionArray (target,
+                                                mesh,
+                                                TileSize ());
+              }),
+    mConstrainment (settings.maximumRange, mTargets.PointArray ()),
     mSpring (mVelocityIntegrator,
              mPositions.PointArray (),
              settings.springConstant,
@@ -376,9 +549,14 @@ wobbly::Model::Private::Private (Point    const &initialPosition,
     mSettings (settings)
 {
     /* First construct the position array */
-    CalculatePositionArray (initialPosition,
-                            mPositions.PointArray (),
-                            TileSize ());
+    mesh::CalculatePositionArray (initialPosition,
+                                  mPositions.PointArray (),
+                                  TileSize ());
+
+    /* Copy that into the mesh estimation */
+    std::copy (mPositions.PointArray ().begin (),
+               mPositions.PointArray ().end (),
+               mTargets.PointArray ().begin ());
 }
 
 wobbly::Model::Settings wobbly::Model::DefaultSettings =
@@ -488,24 +666,18 @@ wobbly::Model::Private::TargetPosition () const
     wobbly::Vector const tileSize (TileSize ());
 
     auto points (mPositions.PointArray ());
-    auto anchors (mAnchors);
+    auto &estimated (mTargets.PointArray ());
+    auto &anchors (mAnchors);
 
     /* If we have at least one anchor, we can take a short-cut and determine
      * the target position by reference to it */
-    boost::optional <wobbly::Point> early;
-    mAnchors.WithFirstGrabbed ([&early, &points, &tileSize] (size_t index) {
-                                    auto const anchor =
-                                        wobbly::PointView <double> (points,
-                                                                    index);
-
-                                    early =
-                                        TopLeftPositionInSettledMesh (anchor,
-                                                                      index,
-                                                                      tileSize);
+    xstd::optional <wobbly::Point> early;
+    mAnchors.WithFirstGrabbed ([&early, &estimated] (size_t i) {
+                                    return estimated[0];
                                });
 
-    if (early.is_initialized ())
-        return early.get ();
+    if (early)
+        return *early;
 
     /* Make our own copies of the integrators and run the integration on them */
     EulerIntegration              integrator (mVelocityIntegrator);
@@ -521,7 +693,7 @@ wobbly::Model::Private::TargetPosition () const
 
     /* Model will be settled, return the top left point */
     wobbly::Point result;
-    bg::assign_point (result, wobbly::PointView <double> (points, 0));
+    bg::fixups::assign_point (result, wobbly::PointView <double const> (points, 0));
 
     return result;
 }
@@ -533,46 +705,60 @@ wobbly::Model::Private::TileSize () const
                            mHeight / (config::Height - 1));
 }
 
-namespace
-{
-    size_t
-    ClosestIndexToAbsolutePosition (wobbly::MeshArray   &points,
-                                    wobbly::Point const &pos)
-    {
-        boost::optional <size_t> nearestIndex;
-        double distance = std::numeric_limits <double>::max ();
-
-        assert (points.size () == wobbly::config::ArraySize);
-
-        for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
-        {
-            wobbly::PointView <double> view (points, i);
-            double objectDistance = std::fabs (bg::distance (pos, view));
-            if (objectDistance < distance)
-            {
-                nearestIndex = i;
-                distance = objectDistance;
-            }
-        }
-
-        assert (nearestIndex.is_initialized ());
-        return nearestIndex.get ();
-    }
-}
-
 wobbly::Anchor
-wobbly::Model::GrabAnchor (Point const &position)
+wobbly::Model::GrabAnchor (Point const &position) throw (std::runtime_error)
 {
     auto &points = priv->mPositions.PointArray ();
-    size_t index = ClosestIndexToAbsolutePosition (points,
-                                                   position);
+    auto &targets = priv->mTargets.PointArray ();
+    size_t index = mesh::ClosestIndexToPosition (points, position);
 
     /* Bets are off once we've grabbed an anchor, the model is now unequal */
     priv->mCurrentlyUnequal = true;
 
-    auto &positions (priv->mPositions.PointArray ());
+    /* Activate the TargetMesh member for this anchor */
+    auto activation (priv->mTargets.Activate ());
+
+    /* For the first activation, we prefer to use the target positions so that
+     * the mesh can eventually settle even while grabbed. For subsequent
+     * activations, it doesn't make any sense to have a settling mesh
+     * while those grabs are active, since it could be impossible. In such
+     * a case, just grab on the real positions */
+    typedef PointView <double const> const & (Spring::*PosFetch) () const;
+
+    auto const getTarget =
+        [this, &points, &targets](Spring const &spring, PosFetch fetch) {
+            /* Lookup the index of each of the positions referenced in the
+             * spring and then fetch from the target array */
+            for (size_t i = 0; i < config::TotalIndices; ++i)
+            {
+                wobbly::PointView <double const> position (points, i);
+                if (bg::equals ((spring.*fetch) (), position))
+                    return PointView <double const> (targets, i);
+            }
+
+            /* This is a bug */
+            throw std::runtime_error ("Couldn't find position in mesh");
+        };
+
+    TargetMesh::Handle const &handle (activation);
+
+    using namespace std::placeholders;
+    auto const wrap =
+        [&handle, &getTarget](PosFetch fetch) -> SpringMesh::PosPreference {
+            SpringMesh::PosPreference target = std::bind (getTarget, _1, fetch);
+            SpringMesh::PosPreference original =
+                [&fetch](Spring const &spring) {
+                    return (spring.*fetch) ();
+                };
+            return handle == 1 ? target : original;
+        };
+
+    SpringMesh::PosPreference firstPref (wrap (&Spring::FirstPosition));
+    SpringMesh::PosPreference secondPref (wrap (&Spring::SecondPosition));
+
     auto lifetime (priv->mSpring.InstallAnchorSprings (position,
-                                                       positions));
+                                                       firstPref,
+                                                       secondPref));
     return Anchor (wobbly::PointView <double> (points, index),
                    std::move (lifetime),
                    priv->mAnchors,
@@ -583,11 +769,14 @@ void
 wobbly::Model::MoveModelBy (Point const &delta)
 {
     auto &points (priv->mPositions.PointArray ());
+    auto &estimated (priv->mTargets.PointArray ());
 
     for (size_t i = 0; i < config::TotalIndices; ++i)
     {
-        PointView <double> pv (points, i);
-        bg::add_point (pv, delta);
+        PointView <double> pointView (points, i);
+        PointView <double> targetView (estimated, i);
+        bg::add_point (pointView, delta);
+        bg::add_point (targetView, delta);
     }
 }
 
@@ -621,24 +810,37 @@ wobbly::Model::ResizeModel (double width, double height)
     if (bg::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
         return;
 
-    wobbly::Point const modelTargetOrigin (priv->TargetPosition ());
-
     /* Then on each point, implement a transformation
      * for non-anchors that scales the distance between
      * points in model space */
     auto &points (priv->mPositions.PointArray ());
+    auto &targets (priv->mTargets.PointArray ());
 
-    auto rescaleAction =
-        [&points, &modelTargetOrigin, &scaleFactor](size_t index) {
-            wobbly::PointView <double> p (points, index);
-            bg::subtract_point (p, modelTargetOrigin);
+    wobbly::Point const positionsOrigin (priv->TargetPosition ());
+    wobbly::Point const estimationOrigin =
+        [&targets]() {
+            wobbly::Point target;
+            bg::assign (target, wobbly::PointView <double const> (targets, 0));
+            return target;
+        } ();
+
+    auto const rescale =
+        [&points, &scaleFactor](size_t i, wobbly::Point const &origin) {
+            wobbly::PointView <double> p (points, i);
+            bg::subtract_point (p, origin);
             bg::multiply_point (p, scaleFactor);
-            bg::add_point (p, modelTargetOrigin);
+            bg::add_point (p, origin);
         };
 
-    priv->mAnchors.PerformActions ([](size_t index) {
+    /* Perform first on all non-anchors with the target position being
+     * the calculated target position for these positions */
+    priv->mAnchors.PerformActions ([](size_t i) {
                                    },
-                                   rescaleAction);
+                                   [&positionsOrigin,
+                                    &estimationOrigin,
+                                    &rescale](size_t i) {
+                                       rescale (i, estimationOrigin);
+                                   });
 
     /* On each spring, apply the scale factor */
     priv->mSpring.Scale (scaleFactor);
@@ -648,14 +850,11 @@ wobbly::Model::ResizeModel (double width, double height)
     priv->mHeight = height;
 }
 
-wobbly::ConstrainmentStep::ConstrainmentStep (double const &threshold,
-                                              double const &width,
-                                              double const &height) :
+wobbly::ConstrainmentStep::ConstrainmentStep (double    const &threshold,
+                                              MeshArray const &estimated) :
     threshold (threshold),
-    mWidth (width),
-    mHeight (height)
+    estimated (estimated)
 {
-    targetBuffer.fill (0.0);
 }
 
 bool
@@ -669,19 +868,19 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
      * starting to integrate the model
      */
     auto const action =
-        [this, &points, &ret](size_t index) {
-            wobbly::Vector tileSize (mWidth / (config::Width - 1),
-                                     mHeight / (config::Height - 1));
-            auto const anchor = wobbly::PointView <double> (points, index);
-
+        [this, &points, &ret](size_t i) {
+            //wobbly::Vector tileSize (mWidth / (config::Width - 1),
+            //                         mHeight / (config::Height - 1));
+            //auto const anchor = wobbly::PointView <double> (points, i);
+/*
             wobbly::Point start (TopLeftPositionInSettledMesh (anchor,
-                                                               index,
+                                                               i,
                                                                tileSize));
 
-            CalculatePositionArray (start,
-                                    targetBuffer,
-                                    tileSize);
-
+            mesh::CalculatePositionArray (start,
+                                          estimated,
+                                          tileSize);
+*/
             /* In each position in the main position array we'll work out the
              * pythagorean delta between the ideal positon and current one.
              * If it is outside the maximum range, then we'll shrink the delta
@@ -691,7 +890,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
             for (size_t i = 0; i < config::TotalIndices; ++i)
             {
                 wobbly::PointView <double> point (points, i);
-                wobbly::PointView <double> target (targetBuffer, i);
+                wobbly::PointView <double const> target (estimated, i);
 
                 double range = bg::distance (target, point);
 
@@ -710,7 +909,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
                                         newRange * sin);
 
                 /* Offset from the "target" position */
-                bg::assign_point (point, target);
+                bg::fixups::assign_point (point, target);
                 bg::subtract_point (point, newDelta);
             }
         };
@@ -752,10 +951,15 @@ wobbly::Model::Step (unsigned int time)
     if (!priv->mCurrentlyUnequal)
     {
         auto       &positions (priv->mPositions.PointArray ());
+        auto const &estimated (priv->mTargets.PointArray ());
         auto const &anchors (priv->mAnchors);
 
         auto const action =
-            [this, &positions](size_t index) {
+            [this, &estimated, &positions](size_t index) {
+                std::copy (estimated.begin (),
+                           estimated.end (),
+                           positions.begin ());
+/*
                 wobbly::Vector tileSize (priv->TileSize ());
 
                 auto const anchor = wobbly::PointView <double> (positions,
@@ -765,9 +969,9 @@ wobbly::Model::Step (unsigned int time)
                                                              index,
                                                              tileSize));
 
-                CalculatePositionArray (tl,
-                                        positions,
-                                        tileSize);
+                mesh::CalculatePositionArray (tl,
+                                              positions,
+                                              tileSize); */
             };
         anchors.WithFirstGrabbed (action);
     }
@@ -785,6 +989,25 @@ std::array <wobbly::Point, 4> const
 wobbly::Model::Extremes () const
 {
     return priv->mPositions.Extremes ();
+}
+
+wobbly::TargetMesh::TargetMesh (OriginRecalcStrategy const &origin) :
+    activationCount (0),
+    origin (origin)
+{
+    mPoints.fill (0);
+}
+
+wobbly::TemporaryOwner <wobbly::TargetMesh::Handle>
+wobbly::TargetMesh::Activate () noexcept (true)
+{
+    if (++activationCount == 1)
+        origin (mPoints);
+
+    return TemporaryOwner <Handle> (0,
+                                    [this](int) {
+                                        --activationCount;
+                                    });
 }
 
 wobbly::BezierMesh::BezierMesh ()

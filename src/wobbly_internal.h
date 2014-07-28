@@ -16,10 +16,14 @@
 #define WOBBLY_INTERNAL_H
 
 #include <functional>
+#include <list>
 
 #include <boost/geometry/geometry.hpp>
-#include <boost/optional.hpp>
 
+/* boost::optional supports references in optional <T> while xstd::optional
+ * does not. xstd::optional supports move semantics. Use the latter unless
+ * there is a usecase for the former */
+#include <third_party/allow_move_optional/optional.hpp>
 #include <smspillaz/wobbly/wobbly.h>
 
 namespace boost
@@ -58,437 +62,75 @@ namespace boost
 
 namespace wobbly
 {
-    class Spring
+    namespace collections
     {
-        public:
-
-            Spring (PointView <double> &&forceA,
-                    PointView <double> &&forceB,
-                    PointView <double const> &&posA,
-                    PointView <double const> &&posB,
-                    Vector distance);
-            Spring (Spring &&spring) noexcept;
-            ~Spring ();
-
-            Spring & operator= (Spring &&spring) noexcept (true);
-
-            Spring (Spring const &spring) = delete;
-            Spring & operator= (Spring const &spring) = delete;
-
-            bool ApplyForces (double springConstant) const;
-            void ScaleLength (Vector scaleFactor);
-
-            static constexpr double ClipThreshold = 0.25;
-
-        private:
-
-            PointView <double> mutable forceA;
-            PointView <double> mutable forceB;
-            PointView <double const>   posA;
-            PointView <double const>   posB;
-            Vector desiredDistance;
-    };
-
-    /* Precision of the model itself */
-    namespace config
-    {
-        static constexpr size_t Width = 4;
-        static constexpr size_t Height = 4;
-        static constexpr size_t TotalIndices = Width * Height;
-        static constexpr size_t ArraySize  = TotalIndices * 2;
-    }
-
-    template <int N>
-    class TrackedAnchors :
-        public Anchor::Storage
-    {
-        public:
-
-            typedef std::array <Anchor, N> InternalArray;
-
-            TrackedAnchors ()
-            {
-                anchors.fill (0);
-            }
-
-            void Lock (size_t index) override
-            {
-                /* Keep track of the first-anchor value */
-                unsigned int const previousValue = anchors[index]++;
-                if (previousValue == 0 && !firstAnchor)
-                    firstAnchor = index;
-            }
-
-            void Unlock (size_t index) override
-            {
-                unsigned int const currentValue = --anchors[index];
-                bool const firstAnchorIsThisIndex =
-                    firstAnchor.is_initialized () &&
-                    firstAnchor.get () == index;
-
-                /* Don't have first anchor anymore. Go to the
-                 * heaviest anchor next */
-                if (currentValue == 0 && firstAnchorIsThisIndex)
-                {
-                    auto largest = std::max_element (anchors.begin (),
-                                                     anchors.end ());
-                    if (*largest > 0)
-                        firstAnchor = std::distance (anchors.begin (), largest);
-                    else
-                        firstAnchor.reset ();
-                }
-            }
-
-            template <typename AnchorAction, typename NonAnchorAction>
-            void PerformActions (AnchorAction const &anchorAction,
-                                 NonAnchorAction const &nonAnchorAction) const
-            {
-                for (size_t i = 0; i < N; ++i)
-                {
-                    if (anchors[i] > 0)
-                        anchorAction (i);
-                    else
-                        nonAnchorAction (i);
-                }
-            }
-
-            template <typename Action>
-            void WithFirstGrabbed (Action const &action) const
-            {
-                if (firstAnchor.is_initialized ())
-                    action (firstAnchor.get ());
-            }
-
-        private:
-
-            std::array <unsigned int, N> anchors;
-            boost::optional <size_t> firstAnchor;
-    };
-
-    typedef std::array <double, config::ArraySize> MeshArray;
-    typedef TrackedAnchors <config::TotalIndices> AnchorArray;
-
-    class BezierMesh
-    {
-        public:
-
-            BezierMesh ();
-            ~BezierMesh ();
-
-            Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
-            std::array <Point, 4> const Extremes () const;
-
-            /* Direct access to the points in this mesh is permitted.
-             *
-             * PointForIndex is just a convenience function to get a PointView
-             * by an x, y index.
-             *
-             * PointArray gets the entire array at once and should be used
-             * where the array is being accessed sequentially */
-            PointView <double> PointForIndex (size_t x, size_t y);
-
-            MeshArray & PointArray ()
-            {
-                return mPoints;
-            }
-
-            MeshArray const & PointArray () const
-            {
-                return mPoints;
-            }
-
-        private:
-
-            MeshArray mPoints;
-    };
-
-    class ConstrainmentStep
-    {
-        public:
-
-            ConstrainmentStep (double const &threshold,
-                               double const &width,
-                               double const &height);
-
-            bool operator () (MeshArray         &points,
-                              AnchorArray const &anchors);
-
-        private:
-
-            double const &threshold;
-            double const &mWidth;
-            double const &mHeight;
-
-            MeshArray targetBuffer;
-    };
-
-    /* AnchoredIntegration wraps an IntegrationStrategy and performs it on
-     * a point only if there is no corresponding anchor set for that point */
-    template <typename IntegrationStrategy>
-    class AnchoredIntegration
-    {
-        public:
-
-            AnchoredIntegration (IntegrationStrategy &strategy) :
-                strategy (strategy)
-            {
-            }
-
-            bool operator () (MeshArray         &positions,
-                              MeshArray   const &forces,
-                              AnchorArray const &anchors,
-                              double            friction)
-            {
-                bool more = false;
-                auto const resetAction =
-                    [this](size_t index) {
-                        strategy.Reset (index);
-                    };
-                auto const stepAction =
-                    [this, friction, &positions, &forces, &more](size_t index) {
-                        more |= strategy.Step (index,
-                                               1.0,
-                                               friction,
-                                               Model::Mass,
-                                               positions,
-                                               forces);
-                    };
-
-                anchors.PerformActions (resetAction, stepAction);
-
-               return more;
-            }
-
-        private:
-
-            typedef IntegrationStrategy IS;
-
-            AnchoredIntegration (AnchoredIntegration <IS> const &) = delete;
-            AnchoredIntegration <IS> &
-            operator= (AnchoredIntegration <IS> const &) = delete;
-
-            IntegrationStrategy &strategy;
-    };
-
-    bool
-    EulerIntegrate (double                           time,
-                    double                           friction,
-                    double                           mass,
-                    wobbly::PointView <double>       &&inposition,
-                    wobbly::PointView <double>       &&invelocity,
-                    wobbly::PointView <double const> &&inforce);
-
-    class EulerIntegration
-    {
-        public:
-
-            EulerIntegration ();
-
-            void Reset (size_t i);
-            bool Step (size_t          index,
-                       double          time,
-                       double          friction,
-                       double          mass,
-                       MeshArray       &positions,
-                       MeshArray const &forces);
-
-        private:
-
-            MeshArray velocities;
-    };
-
-    class Anchor::Lifetime
-    {
-    public:
-
-        virtual ~Lifetime () {};
-
-        bool operator== (Lifetime const &other) const
+        namespace detail
         {
-            return SameAs (other);
-        }
-
-        bool operator!= (Lifetime const &other) const
-        {
-            return !(*this == other);
-        }
-
-    private:
-        virtual bool SameAs (Lifetime const &other) const = 0;
-    };
-
-    class AnchorPackage :
-        public Anchor::Lifetime
-    {
-        public:
-
-            AnchorPackage (Point              const &grabPoint,
-                           MeshArray                &positions,
-                           MeshArray                &forces,
-                           size_t                   first,
-                           size_t                   second) :
-                firstSpring (wobbly::PointView <double> (forces, first),
-                             wobbly::PointView <double> (mForces, 0),
-                             wobbly::PointView <double> (positions, second),
-                             wobbly::PointView <double> (mPositions, 0),
-                             Delta (grabPoint, positions, first)),
-                secondSpring (wobbly::PointView <double> (forces, second),
-                              wobbly::PointView <double> (mForces, 1),
-                              wobbly::PointView <double> (positions, second),
-                              wobbly::PointView <double> (mPositions, 1),
-                              Delta (grabPoint, positions, second))
+            /* Count down until we have all distances */
+            template <typename Function,
+                      typename Collection,
+                      typename IteratorTuple,
+                      size_t   N>
+            struct PreserveIterator
             {
-                mPositions.fill (0);
-                mForces.fill (0);
-            }
-
-            AnchorPackage (AnchorPackage &&package) noexcept (true):
-                mPositions (std::move (package.mPositions)),
-                mForces (std::move (package.mForces)),
-                firstSpring (std::move (package.firstSpring)),
-                secondSpring (std::move (package.secondSpring))
-            {
-            }
-
-            AnchorPackage &
-            operator= (AnchorPackage &&other) noexcept (true)
-            {
-                if (this == &other)
-                    return *this;
-
-                mPositions = std::move (other.mPositions);
-                mForces = std::move (other.mForces);
-                firstSpring = std::move (other.firstSpring);
-                secondSpring = std::move (other.secondSpring);
-
-                return *this;
-            }
-
-            ~AnchorPackage () noexcept (true)
-            {
-            }
-
-        private:
-
-            bool SameAs (Lifetime const &lifetime) const
-            {
-                return static_cast <Lifetime const *> (this) == &lifetime;
-            }
-
-            Vector Delta (Point     const &installationPoint,
-                          MeshArray const &positions,
-                          size_t          index)
-            {
-                wobbly::PointView <double const> gridPoint (positions, index);
-
-                Vector distance;
-                bg::assign (distance, gridPoint);
-                bg::subtract_point (distance, installationPoint);
-                return distance;
-            }
-
-            std::array <double, 4> mPositions;
-            std::array <double, 4> mForces;
-
-            wobbly::Spring firstSpring;
-            wobbly::Spring secondSpring;
-    };
-
-    class SpringMesh
-    {
-        public:
-
-            SpringMesh (MeshArray    &array,
-                        Vector const &tileSize);
-
-            struct CalculationResult
-            {
-                bool            forcesExist;
-                MeshArray const &forces;
+                IteratorTuple
+                operator () (Function      const &function,
+                             Collection          &collection,
+                             IteratorTuple const &tuple)
+                {
+                    /* We need to call std::begin twice as the value of it
+                     * may change after we've called our iterator-modifying
+                     * function */
+                    auto distance = std::distance (std::begin (collection),
+                                                   std::get <N - 1> (tuple));
+                    auto result (PreserveIterator <Function,
+                                                   Collection,
+                                                   IteratorTuple,
+                                                   N - 1> () (function,
+                                                              collection,
+                                                              tuple));
+                    std::get <N - 1> (result) = std::begin (collection) +
+                                                distance;
+                    return result;
+                }
             };
 
-            CalculationResult CalculateForces (double springConstant) const;
-            void Scale (Vector const &scaleFactor);
-
-            Anchor::LTH
-            InstallAnchorSprings (Point     const &installationPoint,
-                                  MeshArray       &positions);
-
-        private:
-
-            SpringMesh (SpringMesh const &mesh) = delete;
-            SpringMesh & operator= (SpringMesh other) = delete;
-
-            MeshArray mutable    mForces;
-            std::vector <Spring> mSprings;
-
-            Vector               mSpringDimensions;
-
-            std::vector <AnchorPackage> mAnchorSprings;
-
-            void DistributeSprings (MeshArray &array);
-    };
-
-    template <typename IntegrationStrategy>
-    class SpringStep
-    {
-        public:
-
-            SpringStep (IntegrationStrategy  &strategy,
-                        MeshArray            &array,
-                        double         const &constant,
-                        double         const &friction,
-                        wobbly::Vector const &tileSize) :
-                constant (constant),
-                friction (friction),
-                integrator (strategy),
-                mesh (array, tileSize)
+            /* Start counting back up again */
+            template <typename Function,
+                      typename Collection,
+                      typename IteratorTuple>
+            struct PreserveIterator <Function, Collection, IteratorTuple, 0>
             {
-            }
+                IteratorTuple
+                operator () (Function      const &function,
+                             Collection          &collection,
+                             IteratorTuple const &tuple)
+                {
+                    function ();
+                    return IteratorTuple ();
+                }
+            };
+        }
 
-            void Scale (Vector const &scaleFactor)
-            {
-                mesh.Scale (scaleFactor);
-            }
+        template <typename Function,
+                  typename Collection,
+                  typename IteratorTuple>
+        IteratorTuple
+        KeepIteratorsAlive (Function      const &function,
+                            Collection          &collection,
+                            IteratorTuple const &tuple)
+        {
+            typedef Function F;
+            typedef Collection C;
+            typedef IteratorTuple T;
+            constexpr size_t const S = std::tuple_size <IteratorTuple>::value;
 
-            Anchor::LTH
-            InstallAnchorSprings (Point     const &installationPoint,
-                                  MeshArray       &positions)
-            {
-                return mesh.InstallAnchorSprings (installationPoint,
-                                                  positions);
-            }
+            return detail::PreserveIterator <F, C, T, S> () (function,
+                                                             collection,
+                                                             tuple);
+        }
+    }
 
-            bool operator () (MeshArray         &positions,
-                              AnchorArray const &anchors)
-            {
-                auto result = mesh.CalculateForces (constant);
-
-                bool more = result.forcesExist;
-                more |= integrator (positions,
-                                    result.forces,
-                                    anchors,
-                                    friction);
-
-                return more;
-            }
-
-        private:
-
-            SpringStep (IntegrationStrategy const &) = delete;
-            SpringStep <IntegrationStrategy> &
-            operator= (SpringStep <IntegrationStrategy> const &) = delete;
-
-            double const &constant;
-            double const &friction;
-
-            AnchoredIntegration <IntegrationStrategy> integrator;
-            SpringMesh                                    mesh;
-    };
-}
-
-namespace wobbly
-{
     namespace geometry
     {
         namespace bg = boost::geometry;
@@ -554,11 +196,769 @@ namespace wobbly
             return ret;
         }
     }
-}
 
+    /* Precision of the model itself */
+    namespace config
+    {
+        static constexpr size_t Width = 4;
+        static constexpr size_t Height = 4;
+        static constexpr size_t TotalIndices = Width * Height;
+        static constexpr size_t ArraySize  = TotalIndices * 2;
+    }
 
-namespace wobbly
-{
+    typedef std::array <double, config::ArraySize> MeshArray;
+
+    namespace mesh
+    {
+        inline void
+        CalculatePositionArray (wobbly::Point  const &initialPosition,
+                                wobbly::MeshArray    &array,
+                                wobbly::Vector const &tileSize)
+        {
+            assert (array.size () == wobbly::config::ArraySize);
+
+            for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
+            {
+                size_t const row = i / wobbly::config::Width;
+                size_t const column = i % wobbly::config::Width;
+
+                wobbly::PointView <double> position (array, i);
+                bg::assign (position, initialPosition);
+                bg::add_point (position,
+                               wobbly::Point (column * bg::get <0> (tileSize),
+                                              row * bg::get <1> (tileSize)));
+            }
+        }
+
+        size_t
+        ClosestIndexToPosition (wobbly::MeshArray   &points,
+                                wobbly::Point const &pos)
+        {
+            xstd::optional <size_t> nearestIndex;
+            double distance = std::numeric_limits <double>::max ();
+
+            assert (points.size () == wobbly::config::ArraySize);
+
+            for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
+            {
+                wobbly::PointView <double> view (points, i);
+                double objectDistance = bg::distance (pos, view);
+                if (objectDistance < distance)
+                {
+                    nearestIndex = i;
+                    distance = objectDistance;
+                }
+            }
+
+            assert (nearestIndex);
+            return *nearestIndex;
+        }
+
+        size_t
+        ClosestNeighbour (size_t              initial,
+                          wobbly::MeshArray   &points,
+                          wobbly::Point const &pos)
+        {
+            size_t const width = config::Width;
+
+            xstd::optional <size_t> nearestIndex;
+            double distance = std::numeric_limits <double>::max ();
+
+            assert (points.size () == wobbly::config::ArraySize);
+
+            std::array <size_t, 4> neighbourIndices =
+            {
+                {
+                    /* left (or right) */
+                    initial % width == 0 ? initial + 1 : initial - 1,
+                    /* top (or bottom) */
+                    initial / width == 0 ? initial + width : initial - width,
+                    /* right (or left) */
+                    initial % width == (width - 1) ? initial - 1 : initial + 1,
+                    /* bottom (or top) */
+                    initial / width ==
+                        (width - 1) ? initial - width : initial + width
+                }
+            };
+
+            for (size_t neighbour : neighbourIndices)
+            {
+                wobbly::PointView <double> view (points, neighbour);
+                double objectDistance = bg::distance (pos, view);
+                if (objectDistance < distance)
+                {
+                    nearestIndex = neighbour;
+                    distance = objectDistance;
+                }
+            }
+
+            assert (nearestIndex);
+            return *nearestIndex;
+        }
+    }
+
+    class Spring
+    {
+        public:
+
+            Spring (PointView <double>       &&forceA,
+                    PointView <double>       &&forceB,
+                    PointView <double const> &&posA,
+                    PointView <double const> &&posB,
+                    Vector             const &distance);
+            Spring (Spring &&spring) noexcept;
+            ~Spring ();
+
+            Spring & operator= (Spring &&spring) noexcept (true);
+
+            Spring (Spring const &spring) = delete;
+            Spring & operator= (Spring const &spring) = delete;
+
+            bool ApplyForces (double springConstant) const;
+            void ScaleLength (Vector scaleFactor);
+
+            PointView <double const> const & FirstPosition () const
+            {
+                return posA;
+            }
+
+            PointView <double const> const & SecondPosition () const
+            {
+                return posB;
+            }
+
+            PointView <double> const & FirstForce () const
+            {
+                return forceA;
+            }
+
+            PointView <double> const & SecondForce () const
+            {
+                return forceB;
+            }
+
+            class ID
+            {
+                public:
+                    /* Disable copy, enable move */
+                    ID (size_t internal) :
+                        id (internal)
+                    {
+                    }
+
+                    ID (ID &&other) noexcept (true) :
+                        id (other.id)
+                    {
+                        Nullify (other);
+                    }
+
+                    ID & operator= (ID &&other) noexcept (true)
+                    {
+                        id = std::move (other.id);
+                        Nullify (other);
+                        return *this;
+                    }
+
+                    bool operator== (ID const &other) const
+                    {
+                        return this->id == other.id;
+                    }
+
+                    bool operator!= (ID const &other) const
+                    {
+                        return !(*this == other);
+                    }
+
+                private:
+
+                    ID (ID const &other) = delete;
+                    ID & operator= (ID const &other) = delete;
+
+                    static void Nullify (ID &id)
+                    {
+                        id.id = 0;
+                    }
+
+                    size_t id;
+            };
+
+            bool HasID (ID const &candidateId) const
+            {
+                return id == candidateId;
+            }
+
+            struct ConstructionPackage;
+
+            /* A special static factory which returns both a spring and its
+             * ID, if it needs to be tracked for further use. The returned
+             * ID will be move-only and as such only one object can keep
+             * a reference to it - this prevents proliferation of ID's
+             * throughout the system */
+            static ConstructionPackage
+            CreateWithTrackingID (PointView <double>       &&forceA,
+                                  PointView <double>       &&forceB,
+                                  PointView <double const> &&posA,
+                                  PointView <double const> &&posB,
+                                  Vector             const &distance);
+
+            static constexpr double ClipThreshold = 0.25;
+
+        private:
+
+            typedef std::function <size_t ()> IDFetchStrategy;
+            Spring (PointView<double>       &&forceA,
+                    PointView<double>       &&forceB,
+                    PointView<const double> &&posA,
+                    PointView<const double> &&posB,
+                    Vector                  distance,
+                    IDFetchStrategy const   &fetchID);
+
+            PointView <double> mutable forceA;
+            PointView <double> mutable forceB;
+            PointView <double const>   posA;
+            PointView <double const>   posB;
+            Vector                     desiredDistance;
+            ID                         id;
+    };
+
+    struct Spring::ConstructionPackage
+    {
+        Spring spring;
+        ID     id;
+    };
+
+    template <int N>
+    class TrackedAnchors :
+        public Anchor::Storage
+    {
+        public:
+
+            typedef std::array <Anchor, N> InternalArray;
+
+            TrackedAnchors ()
+            {
+                anchors.fill (0);
+            }
+
+            void Lock (size_t index) override
+            {
+                /* Keep track of the first-anchor value */
+                unsigned int const previousValue = anchors[index]++;
+                if (previousValue == 0 && !firstAnchor)
+                    firstAnchor = index;
+            }
+
+            void Unlock (size_t index) override
+            {
+                unsigned int const currentValue = --anchors[index];
+                bool const firstAnchorIsThisIndex =
+                    firstAnchor && *firstAnchor == index;
+
+                /* Don't have first anchor anymore. Go to the
+                 * heaviest anchor next */
+                if (currentValue == 0 && firstAnchorIsThisIndex)
+                {
+                    auto largest = std::max_element (anchors.begin (),
+                                                     anchors.end ());
+                    if (*largest > 0)
+                        firstAnchor = std::distance (anchors.begin (), largest);
+                    else
+                        firstAnchor.extract ();
+                }
+            }
+
+            template <typename AnchorAction, typename NonAnchorAction>
+            void PerformActions (AnchorAction const &anchorAction,
+                                 NonAnchorAction const &nonAnchorAction) const
+            {
+                for (size_t i = 0; i < N; ++i)
+                {
+                    if (anchors[i] > 0)
+                        anchorAction (i);
+                    else
+                        nonAnchorAction (i);
+                }
+            }
+
+            template <typename Action>
+            void WithFirstGrabbed (Action const &action) const
+            {
+                if (firstAnchor)
+                    action (*firstAnchor);
+            }
+
+        private:
+
+            std::array <unsigned int, N> anchors;
+            xstd::optional <size_t> firstAnchor;
+    };
+
+    typedef TrackedAnchors <config::TotalIndices> AnchorArray;
+
+    template <typename T>
+    struct EnableIfMoveOnly :
+        public std::enable_if <std::is_nothrow_move_assignable <T>::value &&
+                               std::is_nothrow_move_constructible <T>::value &&
+                               !std::is_copy_assignable <T>::value &&
+                               !std::is_copy_constructible <T>::value>
+    {
+    };
+
+    template <typename Resource,
+              typename = typename EnableIfMoveOnly <Resource>::type>
+    class TemporaryOwner
+    {
+        public:
+
+            typedef std::function <void (Resource &&)> Release;
+
+            TemporaryOwner (Resource      &&resource,
+                            Release const &release) :
+                resource (std::move (resource)),
+                release (release)
+            {
+            }
+
+            TemporaryOwner (TemporaryOwner &&owner) noexcept (true) :
+                resource (std::move (owner.resource)),
+                release (std::move (owner.release))
+            {
+                Nullify (owner);
+            }
+
+            TemporaryOwner & operator= (TemporaryOwner &&owner) noexcept (true)
+            {
+                resource = std::move (owner.resource);
+                release = std::move (owner.release);
+
+                Nullify (owner);
+                return *this;
+            }
+
+            ~TemporaryOwner ()
+            {
+                if (release)
+                    release (std::move (resource));
+            }
+
+            operator Resource const & () const
+            {
+                return resource;
+            }
+
+        private:
+
+            static void Nullify (TemporaryOwner &owner)
+            {
+                /* Cause release to be a newly-created object - which is
+                 * technically more expensive than a move, but will
+                 * cause the function to be empty meaning we can't
+                 * call it on our destructor */
+                owner.release = Release ();
+            }
+
+            Resource resource;
+            Release  release;
+    };
+
+    class TargetMesh
+    {
+        public:
+
+            typedef std::function <void (MeshArray &)> OriginRecalcStrategy;
+
+            class Handle
+            {
+                public:
+
+                    Handle (size_t id) :
+                        id (id)
+                    {
+                    }
+
+                    Handle (Handle &&handle) noexcept (true) :
+                        id (std::move (handle.id))
+                    {
+                        handle.id = 0;
+                    }
+
+                    Handle & operator= (Handle &&handle) noexcept (true)
+                    {
+                        if (this == &handle)
+                            return *this;
+
+                        id = std::move (handle.id);
+                        handle.id = 0;
+
+                        return *this;
+                    }
+
+                    operator size_t () const
+                    {
+                        return id;
+                    }
+
+                private:
+
+                    size_t id;
+            };
+
+            TargetMesh (OriginRecalcStrategy const &recalc);
+
+            wobbly::TemporaryOwner <Handle> Activate () noexcept (true);
+
+            wobbly::MeshArray const & PointArray () const noexcept (true)
+            {
+                return mPoints;
+            }
+
+            wobbly::MeshArray & PointArray () noexcept (true)
+            {
+                return mPoints;
+            }
+
+        private:
+
+            MeshArray            mPoints;
+            size_t               activationCount;
+            OriginRecalcStrategy origin;
+    };
+
+    class BezierMesh
+    {
+        public:
+
+            BezierMesh ();
+            ~BezierMesh ();
+
+            Point DeformUnitCoordsToMeshSpace (Point const &normalized) const;
+            std::array <Point, 4> const Extremes () const;
+
+            /* Direct access to the points in this mesh is permitted.
+             *
+             * PointForIndex is just a convenience function to get a PointView
+             * by an x, y index.
+             *
+             * PointArray gets the entire array at once and should be used
+             * where the array is being accessed sequentially */
+            PointView <double> PointForIndex (size_t x, size_t y);
+
+            MeshArray & PointArray ()
+            {
+                return mPoints;
+            }
+
+            MeshArray const & PointArray () const
+            {
+                return mPoints;
+            }
+
+        private:
+
+            MeshArray mPoints;
+    };
+
+    class ConstrainmentStep
+    {
+        public:
+
+            ConstrainmentStep (double    const &threshold,
+                               MeshArray const &estimated);
+
+            bool operator () (MeshArray         &points,
+                              AnchorArray const &anchors);
+
+        private:
+
+            double    const &threshold;
+            MeshArray const &estimated;
+    };
+
+    /* AnchoredIntegration wraps an IntegrationStrategy and performs it on
+     * a point only if there is no corresponding anchor set for that point */
+    template <typename IntegrationStrategy>
+    class AnchoredIntegration
+    {
+        public:
+
+            AnchoredIntegration (IntegrationStrategy &strategy) :
+                strategy (strategy)
+            {
+            }
+
+            bool operator () (MeshArray         &positions,
+                              MeshArray   const &forces,
+                              AnchorArray const &anchors,
+                              double            friction)
+            {
+                bool more = false;
+                auto const resetAction =
+                    [this](size_t i) {
+                        strategy.Reset (i);
+                    };
+                auto const stepAction =
+                    [this, friction, &positions, &forces, &more](size_t i) {
+                        more |= strategy.Step (i,
+                                               1.0,
+                                               friction,
+                                               Model::Mass,
+                                               positions,
+                                               forces);
+                    };
+
+                anchors.PerformActions (resetAction, stepAction);
+
+               return more;
+            }
+
+        private:
+
+            typedef IntegrationStrategy IS;
+
+            AnchoredIntegration (AnchoredIntegration <IS> const &) = delete;
+            AnchoredIntegration <IS> &
+            operator= (AnchoredIntegration <IS> const &) = delete;
+
+            IntegrationStrategy &strategy;
+    };
+
+    bool
+    EulerIntegrate (double                           time,
+                    double                           friction,
+                    double                           mass,
+                    wobbly::PointView <double>       &&inposition,
+                    wobbly::PointView <double>       &&invelocity,
+                    wobbly::PointView <double const> &&inforce);
+
+    class EulerIntegration
+    {
+        public:
+
+            EulerIntegration ();
+
+            void Reset (size_t i);
+            bool Step (size_t          i,
+                       double          time,
+                       double          friction,
+                       double          mass,
+                       MeshArray       &positions,
+                       MeshArray const &forces);
+
+        private:
+
+            MeshArray velocities;
+    };
+
+    class Anchor::GrabStrategy
+    {
+        public:
+
+            virtual ~GrabStrategy () {};
+
+            virtual void MoveBy (wobbly::Point const &delta)
+            {
+            }
+    };
+
+    class SpringMesh
+    {
+        public:
+
+            SpringMesh (MeshArray    &array,
+                        Vector const &tileSize);
+
+            struct CalculationResult
+            {
+                bool            forcesExist;
+                MeshArray const &forces;
+            };
+
+            CalculationResult CalculateForces (double springConstant) const;
+            void Scale (Vector const &scaleFactor);
+
+            class SpringVector
+            {
+                public:
+
+                    SpringVector (std::vector <Spring> &&baseSprings) :
+                        mSprings (std::move (baseSprings))
+                    {
+                    }
+
+                    typedef std::function <void (Spring &)> Function;
+                    void Each (Function const &function)
+                    {
+                        for (auto &spring : mSprings)
+                            function (spring);
+                    }
+
+                    typedef std::function <void (Spring const &)> ConstFunction;
+                    void Each (ConstFunction const &function) const
+                    {
+                        for (auto const &spring : mSprings)
+                            function (spring);
+                    }
+
+                    typedef std::function <bool (Spring const &)> Predicate;
+                    TemporaryOwner <Spring>
+                    TakeMatching (Predicate const &comparator)
+                    {
+                        auto it = std::remove_if (std::begin (mSprings),
+                                                  std::end (mSprings),
+                                                  comparator);
+
+                        if (it == mSprings.end ())
+                            throw std::logic_error ("Couldn't find matching "
+                                                    "spring");
+
+                        Spring steal (std::move (*it));
+                        mSprings.erase (it);
+
+                        auto const replacer =
+                            [this](Spring &&spring) {
+                                auto const idExists =
+                                    [this, &spring](Spring::ID const &id) {
+                                        return spring.HasID (id);
+                                    };
+
+                                auto exists =
+                                    std::remove_if (std::begin (mPending),
+                                                    std::end (mPending),
+                                                    idExists);
+
+                                if (exists != mPending.end ())
+                                    mPending.erase (exists);
+                                else
+                                    mSprings.emplace_back (std::move (spring));
+                            };
+
+                       TemporaryOwner <Spring> tmp (std::move (steal),
+                                                    replacer);
+                       return std::move (tmp);
+                    }
+
+                    TemporaryOwner <Spring::ID>
+                    EmplaceAndTrack (PointView <double>       &&forceA,
+                                     PointView <double>       &&forceB,
+                                     PointView <double const> &&posA,
+                                     PointView <double const> &&posB,
+                                     Vector             const &distance)
+                    {
+                        auto package =
+                            Spring::CreateWithTrackingID (std::move (forceA),
+                                                          std::move (forceB),
+                                                          std::move (posA),
+                                                          std::move (posB),
+                                                          distance);
+
+                        mSprings.emplace_back (std::move (package.spring));
+
+                        auto const remover =
+                           [this](Spring::ID &&id) {
+                                auto const predicate =
+                                    [this, &id](Spring const &spring) {
+                                        return spring.HasID (id);
+                                    };
+
+                                auto exists =
+                                    std::remove_if (std::begin (mSprings),
+                                                    std::end (mSprings),
+                                                    predicate);
+
+                                if (exists == mSprings.end ())
+                                    mPending.emplace_back (std::move (id));
+                                else
+                                    mSprings.erase (exists);
+                            };
+
+                        TemporaryOwner <Spring::ID> tmp (std::move (package.id),
+                                                         remover);
+                        return std::move (tmp);
+                    }
+
+                private:
+
+                    SpringVector (SpringVector const &) = delete;
+                    SpringVector & operator= (SpringVector const &) = delete;
+
+                    std::vector <Spring>     mSprings;
+                    std::vector <Spring::ID> mPending;
+            };
+
+            typedef PointView <double const> DCPV;
+            typedef std::function <DCPV (Spring const &)> PosPreference;
+
+            Anchor::LTH
+            InstallAnchorSprings (Point              const &installationPoint,
+                                  PosPreference const &firstPref,
+                                  PosPreference const &secondPref);
+
+        private:
+
+            SpringMesh (SpringMesh const &mesh) = delete;
+            SpringMesh & operator= (SpringMesh other) = delete;
+
+            MeshArray mutable    mForces;
+            SpringVector         mSprings;
+    };
+
+    template <typename IntegrationStrategy>
+    class SpringStep
+    {
+        public:
+
+            SpringStep (IntegrationStrategy  &strategy,
+                        MeshArray            &array,
+                        double         const &constant,
+                        double         const &friction,
+                        wobbly::Vector const &tileSize) :
+                constant (constant),
+                friction (friction),
+                integrator (strategy),
+                mesh (array, tileSize)
+            {
+            }
+
+            void Scale (Vector const &scaleFactor)
+            {
+                mesh.Scale (scaleFactor);
+            }
+
+            Anchor::LTH
+            InstallAnchorSprings (Point                          const &install,
+                                  SpringMesh::PosPreference const &first,
+                                  SpringMesh::PosPreference const &second)
+            {
+                return mesh.InstallAnchorSprings (install, first, second);
+            }
+
+            bool operator () (MeshArray         &positions,
+                              AnchorArray const &anchors)
+            {
+                auto result = mesh.CalculateForces (constant);
+
+                bool more = result.forcesExist;
+                more |= integrator (positions,
+                                    result.forces,
+                                    anchors,
+                                    friction);
+
+                return more;
+            }
+
+        private:
+
+            SpringStep (IntegrationStrategy const &) = delete;
+            SpringStep <IntegrationStrategy> &
+            operator= (SpringStep <IntegrationStrategy> const &) = delete;
+
+            double const &constant;
+            double const &friction;
+
+            AnchoredIntegration <IntegrationStrategy> integrator;
+            SpringMesh                                mesh;
+    };
+
     namespace euler
     {
         template <typename Velocity, typename Force>
@@ -719,8 +1119,9 @@ wobbly::SpringMesh::CalculateForces (double springConstant) const
     /* Accumulate force on each end of each spring. Some points are endpoints
      * of multiple springs so these functions may cause a force to be updated
      * multiple (different) times */
-    for (Spring const &spring : mSprings)
-        more |= spring.ApplyForces (springConstant);
+    mSprings.Each ([&more, &springConstant](Spring const &spring) {
+                       more |= spring.ApplyForces (springConstant);
+                   });
 
     return { more, mForces };
 }

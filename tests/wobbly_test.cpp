@@ -6,7 +6,6 @@
  * See LICENCE.md for Copyright information.
  */
 #include <functional>
-#include <iostream>
 #include <gmock/gmock.h>
 #include <boost/geometry/algorithms/assign.hpp>
 #include <boost/geometry/algorithms/for_each.hpp>
@@ -21,7 +20,9 @@
 
 using ::testing::_;
 using ::testing::AtLeast;
+using ::testing::Combine;
 using ::testing::ElementsAreArray;
+using ::testing::ExitedWithCode;
 using ::testing::Invoke;
 using ::testing::MakeMatcher;
 using ::testing::MakePolymorphicMatcher;
@@ -403,14 +404,8 @@ namespace
     };
 
     class StubLifetime :
-        public wobbly::Anchor::Lifetime
+        public wobbly::Anchor::GrabStrategy
     {
-        private:
-
-            bool SameAs (Lifetime const &lifetime) const override
-            {
-                return static_cast <Lifetime const *> (this) == &lifetime;
-            }
     };
 
     class Anchor :
@@ -418,14 +413,11 @@ namespace
     {
         public:
 
-            wobbly::Anchor::LTH Handle (StubLifetime &lifetime)
+            wobbly::Anchor::LTH Handle ()
             {
-                return wobbly::Anchor::LTH (&lifetime,
-                                            [](wobbly::Anchor::Lifetime *) {
-                                            });
+                return wobbly::Anchor::LTH (new StubLifetime ());
             }
 
-            StubLifetime            lifetime;
             MockAnchorStorage       anchorStorage;
             SingleObjectStorage     object;
     };
@@ -436,7 +428,7 @@ namespace
         EXPECT_CALL (anchorStorage, Lock (index)).Times (1);
 
         wobbly::Anchor anchor (object.Position (),
-                               Handle (lifetime),
+                               Handle (),
                                anchorStorage,
                                index);
     }
@@ -445,7 +437,7 @@ namespace
     {
         size_t const index = 0;
         wobbly::Anchor anchor (object.Position (),
-                               Handle (lifetime),
+                               Handle (),
                                anchorStorage,
                                index);
 
@@ -456,7 +448,7 @@ namespace
     {
         size_t const index = 0;
         wobbly::Anchor anchor (object.Position (),
-                               Handle (lifetime),
+                               Handle (),
                                anchorStorage,
                                index);
 
@@ -469,7 +461,7 @@ namespace
     {
         size_t const index = 0;
         wobbly::Anchor anchor (object.Position (),
-                               Handle (lifetime),
+                               Handle (),
                                anchorStorage,
                                index);
         wobbly::Anchor anchorNext (std::move (anchor));
@@ -481,7 +473,7 @@ namespace
     {
         size_t const index = 0;
         wobbly::Anchor anchor (object.Position (),
-                               Handle (lifetime),
+                               Handle (),
                                anchorStorage,
                                index);
 
@@ -591,10 +583,702 @@ namespace
                                              &action, _1));
     }
 
+    double TileWidth (double width)
+    {
+        return width / (wobbly::config::Width - 1);
+    }
+
+    double TileHeight (double height)
+    {
+        return height / (wobbly::config::Height - 1);
+    }
+
+    double const EvenSize = 100.0f;
+
+    class EvenlyDistributedMesh :
+        public Test
+    {
+        public:
+
+            EvenlyDistributedMesh () :
+                mesh (GetArray ())
+            {
+            }
+
+            static wobbly::MeshArray GetArray ()
+            {
+                wobbly::MeshArray mesh;
+
+                wobbly::Vector size (TileWidth (EvenSize),
+                                     TileHeight (EvenSize));
+                wobbly::mesh::CalculatePositionArray (wobbly::Point (0, 0),
+                                                      mesh,
+                                                      size);
+
+                return mesh;
+            }
+
+            wobbly::MeshArray mesh;
+    };
+
+    struct ClosestIndexToPositionParam
+    {
+        wobbly::Point point;
+        size_t        expectedIndex;
+    };
+
+    class ClosestIndexToPosition :
+        public EvenlyDistributedMesh,
+        public WithParamInterface <ClosestIndexToPositionParam>
+    {
+    public:
+
+        static std::vector <ParamType> NoTransform ()
+        {
+            return GetParams ([](wobbly::Point const &p) {
+                              });
+        }
+
+        static std::vector <ParamType> Expanded ()
+        {
+            wobbly::Vector translation (EvenSize / 2, EvenSize / 2);
+
+            return GetParams ([&translation](wobbly::Point &point) {
+                                 /* Scale on center */
+                                bg::subtract_point (point, translation);
+                                bg::multiply_value (point, 1.1);
+                                bg::add_point (point, translation);
+                              });
+        }
+
+        static std::vector <ParamType> Shrinked ()
+        {
+            wobbly::Vector translation (EvenSize / 2, EvenSize / 2);
+
+            return GetParams ([&translation](wobbly::Point &point) {
+                                 /* Scale on center */
+                                bg::subtract_point (point, translation);
+                                bg::divide_value (point, 1.1);
+                                bg::add_point (point, translation);
+                              });
+        }
+
+    private:
+
+        template <typename Transformation>
+        static std::vector <ParamType> GetParams (Transformation const &trans)
+        {
+            std::vector <ParamType> vec;
+            auto array (GetArray ());
+
+            auto const total = wobbly::config::TotalIndices;
+
+            for (size_t i = 0; i < total; ++i)
+            {
+                wobbly::PointView <double> pv (array, i);
+                ParamType param;
+
+                bg::assign (param.point, pv);
+                param.expectedIndex = i;
+
+                trans (param.point);
+
+                vec.push_back (param);
+            }
+
+            return vec;
+        }
+    };
+
+    TEST_P (ClosestIndexToPosition, Find)
+    {
+        EXPECT_EQ (GetParam ().expectedIndex,
+                   wobbly::mesh::ClosestIndexToPosition (mesh,
+                                                         GetParam ().point));
+    }
+
+    /* First case is just the mesh points themselves */
+    INSTANTIATE_TEST_CASE_P (MeshPoints, ClosestIndexToPosition,
+                             ValuesIn (ClosestIndexToPosition::NoTransform ()));
+
+    /* Second case is the mesh points scaled outwards by a little bit */
+    INSTANTIATE_TEST_CASE_P (ExpandedPoints, ClosestIndexToPosition,
+                             ValuesIn (ClosestIndexToPosition::Expanded ()));
+
+    /* Third case is the mesh points scaled outwards by a little bit */
+    INSTANTIATE_TEST_CASE_P (ShrinkedPoints, ClosestIndexToPosition,
+                             ValuesIn (ClosestIndexToPosition::Shrinked ()));
+
+    struct ClosestNeighbourPart
+    {
+        ClosestNeighbourPart () :
+            position (wobbly::Point (0, 0)),
+            index (0)
+        {
+        }
+
+        ClosestNeighbourPart (wobbly::Point const &position,
+                              size_t              index) :
+            position (position),
+            index (index)
+        {
+        }
+
+        wobbly::Point position;
+        ptrdiff_t     index;
+
+        static ClosestNeighbourPart FromCoords (size_t column, size_t row)
+        {
+            size_t index = row * wobbly::config::Width + column;
+            auto mesh (EvenlyDistributedMesh::GetArray ());
+            wobbly::PointView <double> view (mesh, index);
+            wobbly::Point point;
+            bg::assign (point, view);
+            return ClosestNeighbourPart (point, index);
+        }
+    };
+
+    std::ostream &
+    operator<< (std::ostream               &os,
+                ClosestNeighbourPart const &other)
+    {
+        os << "ClosestNeighbourPart : " << other.position
+           << " (" << other.index << ")";
+        return os;
+    }
+
+    typedef std::tuple <ClosestNeighbourPart, ClosestNeighbourPart>
+            ClosestNeighbourParam;
+
+    class ClosestNeighbour :
+       public EvenlyDistributedMesh,
+       public WithParamInterface <ClosestNeighbourParam>
+    {
+        public:
+
+            ClosestNeighbour () :
+                position (std::get <0> (GetParam ()).position),
+                offset (std::get <1> (GetParam ()).position),
+                initialIndex (std::get <0> (GetParam ()).index),
+                expectedNeighbour (std::get <0> (GetParam ()).index +
+                                   std::get <1> (GetParam ()).index)
+            {
+            }
+
+            wobbly::Point position;
+            wobbly::Point offset;
+            size_t        initialIndex;
+            size_t        expectedNeighbour;
+    };
+
+    TEST_P (ClosestNeighbour, Find)
+    {
+        wobbly::Point findFromLocation (position);
+        bg::add_point (findFromLocation, offset);
+
+        EXPECT_EQ (expectedNeighbour,
+                   wobbly::mesh::ClosestNeighbour (initialIndex,
+                                                   mesh,
+                                                   findFromLocation));
+    }
+
+    ClosestNeighbourPart const centralPositions[] =
+    {
+        ClosestNeighbourPart::FromCoords (1, 1),
+        ClosestNeighbourPart::FromCoords (wobbly::config::Width - 2, 1),
+        ClosestNeighbourPart::FromCoords (1, wobbly::config::Height - 2),
+        ClosestNeighbourPart::FromCoords (wobbly::config::Width - 2,
+                                          wobbly::config::Height - 2)
+    };
+
+    ClosestNeighbourPart const centralOffsets[] =
+    {
+        /* Left */
+        ClosestNeighbourPart (wobbly::Point (-TileWidth (EvenSize),
+                                             0),
+                              -1),
+        /* Top */
+        ClosestNeighbourPart (wobbly::Point (0,
+                                             -TileHeight (EvenSize)),
+                              -wobbly::config::Width),
+        /* Right */
+        ClosestNeighbourPart (wobbly::Point (TileWidth (EvenSize),
+                                             0),
+                              1),
+        /* Bottom */
+        ClosestNeighbourPart (wobbly::Point (0,
+                                             TileHeight (EvenSize)),
+                              wobbly::config::Width)
+    };
+
+    INSTANTIATE_TEST_CASE_P (MeshCenter, ClosestNeighbour,
+                             Combine (ValuesIn (centralPositions),
+                                      ValuesIn (centralOffsets)));
+
+    ClosestNeighbourPart const extremePositions[] =
+    {
+        ClosestNeighbourPart::FromCoords (0, 0),
+        ClosestNeighbourPart::FromCoords (wobbly::config::Width - 1, 0),
+        ClosestNeighbourPart::FromCoords (0, wobbly::config::Height - 1),
+        ClosestNeighbourPart::FromCoords (wobbly::config::Width - 1,
+                                          wobbly::config::Height - 1)
+    };
+
+    wobbly::Point const crosshairOffsets[] =
+    {
+        wobbly::Point (-TileWidth (EvenSize), 0),
+        wobbly::Point (0, -TileHeight (EvenSize)),
+        wobbly::Point (TileWidth (EvenSize), 0),
+        wobbly::Point (0, TileHeight (EvenSize))
+    };
+
+    /* Top left extreme offsets */
+    ClosestNeighbourPart const topLeftExtremeOffsets[] =
+    {
+        /* Left - diagonal to bottom tile */
+        ClosestNeighbourPart (crosshairOffsets[0], wobbly::config::Width),
+        /* Top - diagonal to right tile */
+        ClosestNeighbourPart (crosshairOffsets[1], 1),
+    };
+
+    INSTANTIATE_TEST_CASE_P (TopLeftExtremes, ClosestNeighbour,
+                             Combine (Values (extremePositions[0]),
+                                      ValuesIn (topLeftExtremeOffsets)));
+
+    /* Top right extreme offsets */
+    ClosestNeighbourPart const topRightExtremeOffsets[] =
+    {
+        /* Right - diagonal to bottom tile */
+        ClosestNeighbourPart (crosshairOffsets[2], wobbly::config::Width),
+        /* Top - diagonal to left tile */
+        ClosestNeighbourPart (crosshairOffsets[1], -1),
+    };
+
+    INSTANTIATE_TEST_CASE_P (TopRightExtremes, ClosestNeighbour,
+                             Combine (Values (extremePositions[1]),
+                                      ValuesIn (topRightExtremeOffsets)));
+
+    /* Bottom left extreme offsets */
+    ClosestNeighbourPart const bottomLeftExtremeOffsets[] =
+    {
+        /* Left - diagonal to top tile */
+        ClosestNeighbourPart (crosshairOffsets[0], -wobbly::config::Width),
+        /* Bottom - diagonal to right tile */
+        ClosestNeighbourPart (crosshairOffsets[3], 1),
+    };
+
+    INSTANTIATE_TEST_CASE_P (BottomLeftExtremes, ClosestNeighbour,
+                             Combine (Values (extremePositions[2]),
+                                      ValuesIn (bottomLeftExtremeOffsets)));
+
+    /* Bottom right extreme offsets */
+    ClosestNeighbourPart const bottomRightExtremeOffsets[] =
+    {
+        /* Right - diagonal to top tile */
+        ClosestNeighbourPart (crosshairOffsets[2], -wobbly::config::Width),
+        /* Bottom - diagonal to left tile */
+        ClosestNeighbourPart (crosshairOffsets[3], -1),
+    };
+
+    INSTANTIATE_TEST_CASE_P (BottomRightExtremes, ClosestNeighbour,
+                             Combine (Values (extremePositions[3]),
+                                      ValuesIn (bottomRightExtremeOffsets)));
+
+    class SpringMesh :
+        public EvenlyDistributedMesh
+    {
+    public:
+
+        SpringMesh () :
+            firstPreference ([](wobbly::Spring const &spring) {
+                                 return spring.FirstPosition ();
+                             }),
+            secondPreference ([](wobbly::Spring const &spring) {
+                                  return spring.SecondPosition ();
+                              }),
+            springMesh (mesh,
+                        wobbly::Vector (TileWidth (EvenSize),
+                                        TileHeight (EvenSize)))
+        {
+        }
+
+        wobbly::SpringMesh::PosPreference firstPreference;
+        wobbly::SpringMesh::PosPreference secondPreference;
+
+        wobbly::SpringMesh  springMesh;
+    };
+
+    template <typename P1, typename P2>
+    class PointsInSameDirectionMatcher
+    {
+        public:
+
+            PointsInSameDirectionMatcher (P1 const &origin,
+                                          P2 const &candidate) :
+                origin (origin),
+                candidate (candidate)
+            {
+            }
+
+            template <typename Vector>
+            bool MatchAndExplain (Vector        const &vec,
+                                  MatchResultListener *listener) const
+            {
+                /* A vector points towards another point if tan(theta) formed by the
+                 * two components is the same as tan(theta) formed by the component
+                 * distance from candidate to origin */
+
+                wobbly::Vector delta;
+                bg::assign (delta, candidate);
+                bg::fixups::subtract_point (delta, origin);
+
+                auto vecTanTheta = bg::get <1> (vec) / bg::get <0> (vec);
+                auto distTanTheta = bg::get <1> (delta) / bg::get <0> (delta);
+
+                if (listener)
+                    *listener << "vector (" << vec << ")'s tan(theta) is "
+                              << vecTanTheta << " and tan(theta) between origin"
+                              << " (" << origin << ") and candidate ("
+                              << candidate << ")" << " with delta ("
+                              << delta << ") is " << distTanTheta;
+
+                namespace btt = boost::test_tools;
+                typedef decltype (vecTanTheta) NumericType;
+                auto tolerance = btt::percent_tolerance (10e-9);
+                auto within  =
+                    btt::close_at_tolerance <NumericType> (tolerance);
+                return within (vecTanTheta, distTanTheta);
+            }
+
+            void DescribeTo (::std::ostream *os) const
+            {
+                *os << "point in the same direction as the line formed by "
+                    << origin
+                    << " and "
+                    << candidate;
+            }
+
+            void DescribeNegationTo (::std::ostream *os) const
+            {
+                *os << "does not ";
+                DescribeTo (os);
+            }
+
+        private:
+
+            P1 const &origin;
+            P2 const &candidate;
+    };
+
+    template <typename P1, typename P2>
+    inline PolymorphicMatcher <PointsInSameDirectionMatcher <P1, P2> >
+    PointsInSameDirection (P1 const &origin, P2 const &candidate)
+    {
+        PointsInSameDirectionMatcher <P1, P2> matcher (origin, candidate);
+        return MakePolymorphicMatcher (matcher);
+    }
+
+    /* We can observe the insertion of temporary anchors by looking at
+     * the direction of a first application of force. */
+
+    /* When a temporary anchor is inserted, the points on which
+     * the anchor was inserted should have a net force pointing
+     * towards the anchor's left or right neighbour */
+    TEST_F (SpringMesh, ForceOnPointsTowardsTemporaryAnchor)
+    {
+        /* Insert a temporary anchor between points (1) and (2) on the grid */
+        wobbly::Point const install (EvenSize / 2, 0);
+        wobbly::Point const movement (25, -50);
+        auto handle (springMesh.InstallAnchorSprings (install,
+                                                      firstPreference,
+                                                      secondPreference));
+        handle->MoveBy (movement);
+
+        auto result = springMesh.CalculateForces (SpringConstant);
+
+        wobbly::Point anchorPosition (install);
+        bg::add_point (anchorPosition, movement);
+
+        wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
+        wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
+
+        wobbly::Point anchorLeftPoint (anchorPosition);
+        bg::add_point (anchorLeftPoint, leftOffset);
+
+        wobbly::Point anchorRightPoint (anchorPosition);
+        bg::add_point (anchorRightPoint, rightOffset);
+
+        wobbly::PointView <double const> firstPoint (mesh, 1);
+        wobbly::PointView <double const> secondPoint (mesh, 2);
+
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 1),
+                     PointsInSameDirection (firstPoint, anchorLeftPoint));
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 2),
+                     PointsInSameDirection (secondPoint, anchorRightPoint));
+    }
+
+    /* Insert a second temporary anchor in between a temporary
+     * anchor and an actual point on the grid. The result should be that
+     * upon moving the second temporary anchor and applying forces
+     * for the first time that a force will be directed towards the first
+     * anchor from the first base point (1) and towards the second anchor
+     * from the second base point (2) */
+    TEST_F (SpringMesh, InsertTemporaryAnchorOnTemporarySpring)
+    {
+        /* Insert first temporary anchor between points (1) and (2) on
+         * the grid. */
+        wobbly::Point const firstInstall (EvenSize / 2, 0);
+        auto firstHandle (springMesh.InstallAnchorSprings (firstInstall,
+                                                           firstPreference,
+                                                           secondPreference));
+        /* Insert second temporary anchor between the first temporary
+         * spring's anchor and base point (2) */
+        wobbly::Point const secondInstall (EvenSize / 2 +
+                                               (TileWidth (EvenSize) / 4),
+                                           0);
+        auto secondHandle (springMesh.InstallAnchorSprings (secondInstall,
+                                                            firstPreference,
+                                                            secondPreference));
+
+        /* Move first handle to point above point (1) and second anchor
+         * to point above point (2) */
+        wobbly::Vector const firstMovement (-25, -50);
+        wobbly::Vector const secondMovement (25, -50);
+
+        wobbly::Point firstAnchorPoint (firstInstall);
+        bg::add_point (firstAnchorPoint, firstMovement);
+        firstHandle->MoveBy (firstMovement);
+
+        wobbly::Point secondAnchorPoint (secondInstall);
+        bg::add_point (secondAnchorPoint, secondMovement);
+        secondHandle->MoveBy (secondMovement);
+
+        /* Calculate forces */
+        auto result = springMesh.CalculateForces (SpringConstant);
+
+        /* The desired delta between the first point and its base neighbour is
+         * TileWidth / 2, 0 */
+        wobbly::Point leftOfFirstAnchor (-TileWidth (EvenSize) / 2, 0);
+        bg::add_point (leftOfFirstAnchor, firstAnchorPoint);
+
+        /* For the second point, because we inserted it between the first
+         * spring and the second base point, the desired delta will be half
+         * of the first spring length, eg, TileWidth (EvenSize) / 4, 0 */
+        wobbly::Point rightOfSecondAnchor (TileWidth (EvenSize) / 4, 0);
+        bg::add_point (rightOfSecondAnchor, secondAnchorPoint);
+
+        wobbly::PointView <double const> firstPoint (mesh, 1);
+        wobbly::PointView <double const> secondPoint (mesh, 2);
+
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 1),
+                     PointsInSameDirection (firstPoint, leftOfFirstAnchor));
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 2),
+                     PointsInSameDirection (secondPoint, rightOfSecondAnchor));
+    }
+
+    /* Same setup as the previous test, but this time move the anchors around
+     * but let the second one expire. The force should revert back to the way
+     * it was in the first test */
+    TEST_F (SpringMesh, OnDestructionOfTemporarySpringForceRevertsToFirstAnchor)
+    {
+        /* Insert first temporary anchor between points (1) and (2) on
+         * the grid. */
+        wobbly::Point const firstInstall (EvenSize / 2, 0);
+        auto firstHandle (springMesh.InstallAnchorSprings (firstInstall,
+                                                           firstPreference,
+                                                           secondPreference));
+        /* Insert second temporary anchor between the first temporary
+         * spring's anchor and base point (2) */
+        wobbly::Point const secondInstall (EvenSize / 2 +
+                                               (TileWidth (EvenSize) / 4),
+                                           0);
+        auto secondHandle (springMesh.InstallAnchorSprings (secondInstall,
+                                                            firstPreference,
+                                                            secondPreference));
+
+        /* Move first handle to point above point (1) and second anchor
+         * to point above point (2) */
+        wobbly::Vector const firstMovement (-25, -50);
+        wobbly::Vector const secondMovement (25, -50);
+
+        wobbly::Point firstAnchorPoint (firstInstall);
+        bg::add_point (firstAnchorPoint, firstMovement);
+        firstHandle->MoveBy (firstMovement);
+
+        wobbly::Point secondAnchorPoint (secondInstall);
+        bg::add_point (secondAnchorPoint, secondMovement);
+        secondHandle->MoveBy (secondMovement);
+
+        /* Now that both handles have been moved, make the second one expire */
+        secondHandle.reset ();
+
+        /* Calculate forces */
+        auto result = springMesh.CalculateForces (SpringConstant);
+
+        wobbly::Point anchorPosition (firstInstall);
+        bg::add_point (anchorPosition, firstMovement);
+
+        wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
+        wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
+
+        wobbly::Point anchorLeftPoint (firstAnchorPoint);
+        bg::add_point (anchorLeftPoint, leftOffset);
+
+        wobbly::Point anchorRightPoint (firstAnchorPoint);
+        bg::add_point (anchorRightPoint, rightOffset);
+
+        wobbly::PointView <double const> firstPoint (mesh, 1);
+        wobbly::PointView <double const> secondPoint (mesh, 2);
+
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 1),
+                     PointsInSameDirection (firstPoint, anchorLeftPoint));
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 2),
+                     PointsInSameDirection (secondPoint, anchorRightPoint));
+    }
+
+    TEST_F (SpringMesh, OnDestructionOfAllAnchorsForceBackToNeutral)
+    {
+
+    }
+
+    TEST_F (SpringMesh, HandlesCanExpireInNonReverseOrder)
+    {
+        EXPECT_EXIT ({
+            wobbly::Point const install (EvenSize / 2, 0);
+            auto firstHandle (springMesh.InstallAnchorSprings (install,
+                                                               firstPreference,
+                                                               secondPreference));
+            auto secondHandle (springMesh.InstallAnchorSprings (install,
+                                                                firstPreference,
+                                                                secondPreference));
+            firstHandle.reset ();
+            secondHandle.reset ();
+            exit (0);
+        }, ExitedWithCode (0), "");
+    }
+
+    TEST_F (SpringMesh, ForceBackToNeutralWhenHandlesExpireInNonReverseOrder)
+    {
+        /* All temporary, handles will expire in reverse order */
+        {
+            /* Insert first temporary anchor between points (1) and (2) on
+             * the grid. */
+            wobbly::Point const firstInstall (EvenSize / 2, 0);
+            auto firstHandle (springMesh.InstallAnchorSprings (firstInstall,
+                                                               firstPreference,
+                                                               secondPreference));
+            /* Insert second temporary anchor between the first temporary
+             * spring's anchor and base point (2) */
+            wobbly::Point const secondInstall (EvenSize / 2 +
+                                                   (TileWidth (EvenSize) / 4),
+                                               0);
+            auto secondHandle (springMesh.InstallAnchorSprings (secondInstall,
+                                                                firstPreference,
+                                                                secondPreference));
+            /* Move first handle to point above point (1) and second anchor
+             * to point above point (2) */
+            wobbly::Vector const firstMovement (-25, -50);
+            wobbly::Vector const secondMovement (25, -50);
+
+            wobbly::Point firstAnchorPoint (firstInstall);
+            bg::add_point (firstAnchorPoint, firstMovement);
+            firstHandle->MoveBy (firstMovement);
+
+            wobbly::Point secondAnchorPoint (secondInstall);
+            bg::add_point (secondAnchorPoint, secondMovement);
+            secondHandle->MoveBy (secondMovement);
+
+            /* Kill the first handle before the second */
+            firstHandle.reset ();
+            secondHandle.reset ();
+        }
+
+        /* Calculate forces */
+        auto result = springMesh.CalculateForces (SpringConstant);
+
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 1),
+                     Eq (wobbly::Point (0, 0)));
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 2),
+                     Eq (wobbly::Point (0, 0)));
+    }
+
+    /* This tests that if we pass in a different preference for a
+     * desired distance for this spring, that force points in accordance
+     * with that preference */
+    TEST_F (SpringMesh, DesiredDistanceCanBeDifferentToSpringPositionAtGrab)
+    {
+        /* Insert a temporary anchor between points (1) and (2) on the grid */
+        wobbly::Point const install (EvenSize / 2, 0);
+        wobbly::Point const movement (25, -50);
+        wobbly::Vector const desiredOffset (25, 0);
+
+        std::array <double, 4> points;
+
+        typedef wobbly::PointView <double const> DCPV;
+        typedef DCPV const & (wobbly::Spring::*Get)() const;
+
+        auto const prefOffset =
+            [this, &desiredOffset, &points](wobbly::Spring const &spring,
+                                            Get                  get,
+                                            size_t               offset) {
+                wobbly::PointView <double> pv (points, offset);
+                bg::assign (pv, (spring.*get) ());
+                bg::add_point (pv, desiredOffset);
+
+                return wobbly::PointView <double const> (points, offset);
+            };
+
+        using namespace std::placeholders;
+
+        wobbly::SpringMesh::PosPreference firstPref =
+            std::bind (prefOffset, _1, &wobbly::Spring::FirstPosition, 0);
+
+        wobbly::SpringMesh::PosPreference secondPref =
+            std::bind (prefOffset, _1, &wobbly::Spring::SecondPosition, 1);
+
+        auto handle (springMesh.InstallAnchorSprings (install,
+                                                      firstPref,
+                                                      secondPref));
+        handle->MoveBy (movement);
+
+        auto result = springMesh.CalculateForces (SpringConstant);
+
+        wobbly::Point anchorPosition (install);
+        bg::add_point (anchorPosition, movement);
+
+        wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
+        wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
+
+        wobbly::Point anchorLeftPoint (anchorPosition);
+        bg::add_point (anchorLeftPoint, leftOffset);
+        bg::add_point (anchorLeftPoint, desiredOffset);
+
+        wobbly::Point anchorRightPoint (anchorPosition);
+        bg::add_point (anchorRightPoint, rightOffset);
+        bg::add_point (anchorRightPoint, desiredOffset);
+
+        /* We don't add anything to firstPoint and secondPoint here
+         * because there will be an offset of desiredOffset from
+         * the mesh already in the other direction, eg
+         *
+         * (newPosition - oldPosition) - delta.
+         *
+         * If we add delta to these points (eg, oldPosition) then
+         * this will not model the equation correctly */
+        wobbly::PointView <double const> firstPoint (mesh, 1);
+        wobbly::PointView <double const> secondPoint (mesh, 2);
+
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 1),
+                     PointsInSameDirection (firstPoint, anchorLeftPoint));
+        EXPECT_THAT (wobbly::PointView <double const> (result.forces, 2),
+                     PointsInSameDirection (secondPoint, anchorRightPoint));
+    }
+
     constexpr double TextureWidth = 50.0f;
     constexpr double TextureHeight = 100.0f;
     wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
                                                        TextureHeight / 2);
+
 
     class SpringBezierModel :
         public ::testing::Test
@@ -911,27 +1595,31 @@ namespace
 
             void DescribeTo (std::ostream *os) const
             {
-                *os << "is within :" << std::endl;
-                bg::model::polygon <wobbly::Point> poly;
-                bg::assign (poly, parent);
-                bg::for_each_point (poly, PrintPoint (os));
+                *os << "is";
+                Describe (*os);
             }
 
             void DescribeNegationTo (std::ostream *os) const
             {
-                *os << "is not within :" << std::endl;
+                *os << "is not";
+                Describe (*os);
+            }
+
+        private:
+
+            void Describe (std::ostream &os) const
+            {
+                os << " within :" << std::endl;
                 bg::model::polygon <wobbly::Point> poly;
                 bg::assign (poly, parent);
                 bg::for_each_point (poly, PrintPoint (os));
             }
-
-        private:
 
             class PrintPoint
             {
                 public:
 
-                    PrintPoint (std::ostream *os) :
+                    PrintPoint (std::ostream &os) :
                         os (os)
                     {
                     }
@@ -939,12 +1627,12 @@ namespace
                     template <typename Point>
                     void operator () (Point const &p)
                     {
-                        *os << " - " << p << std::endl;
+                        os << " - " << p << std::endl;
                     }
 
                 private:
 
-                   std::ostream *os;
+                   std::ostream &os;
             };
 
             ParentGeometry parent;
@@ -1439,16 +2127,6 @@ namespace
         EXPECT_TRUE (stepper (positions, anchors));
     }
 
-    double TileWidth (double width, unsigned int nHorizontalTiles)
-    {
-        return width / (nHorizontalTiles - 1);
-    }
-
-    double TileHeight (double height, unsigned int nVerticalTiles)
-    {
-        return height / (nVerticalTiles - 1);
-    }
-
     void
     InitializePositionsWithDimensions (wobbly::MeshArray &positions,
                                        double            width,
@@ -1456,8 +2134,8 @@ namespace
     {
         double const meshWidth = wobbly::config::Width;
         double const meshHeight = wobbly::config::Height;
-        double const tileWidth = TileWidth (width, meshWidth);
-        double const tileHeight = TileHeight (height, meshHeight);
+        double const tileWidth = TileWidth (width);
+        double const tileHeight = TileHeight (height);
 
         for (unsigned int i = 0; i < meshHeight; ++i)
         {
@@ -1480,13 +2158,17 @@ namespace
                 range (10),
                 width (TextureWidth),
                 height (TextureHeight),
-                constrainment (range, width, height)
+                constrainment (range, targets)
             {
                 InitializePositionsWithDimensions (positions,
                                                    TextureWidth,
                                                    TextureHeight);
+                std::copy (positions.begin (),
+                           positions.end (),
+                           targets.begin ());
             }
 
+            wobbly::MeshArray targets;
             wobbly::MeshArray positions;
             wobbly::AnchorArray anchors;
 
@@ -1835,7 +2517,7 @@ namespace
         EXPECT_THAT (interpolated, Eq (prediction));
     }
 
-    wobbly::Point const meshExtremes[] =
+    wobbly::Point const unitMeshExtremes[] =
     {
         wobbly::Point (0.0, 0.0),
         wobbly::Point (0.0, 1.0),
@@ -1843,7 +2525,7 @@ namespace
         wobbly::Point (1.0, 1.0)
     };
 
-    INSTANTIATE_TEST_CASE_P (Extremes,
+    INSTANTIATE_TEST_CASE_P (UnitExtremes,
                              BezierMeshPoints,
-                             ValuesIn (meshExtremes));
+                             ValuesIn (unitMeshExtremes));
 }

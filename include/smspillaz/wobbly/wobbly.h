@@ -22,8 +22,39 @@ namespace wobbly
 {
     namespace bg = boost::geometry;
 
+    namespace detail
+    {
+        struct CopyablePV
+        {
+            public:
+
+                CopyablePV (CopyablePV const &copy) = default;
+                CopyablePV & operator= (CopyablePV const &copy) = default;
+        };
+
+        struct NoncopyablePV
+        {
+            public:
+
+                NoncopyablePV (NoncopyablePV const &copy) = delete;
+                NoncopyablePV & operator= (NoncopyablePV const &copy) = delete;
+        };
+
+        template <typename NumericType>
+        class PointViewCopyabilityBase
+        {
+            public:
+                typedef NumericType NT;
+                typedef std::is_const <NumericType> IC;
+                typedef std::conditional <IC::value,
+                                          CopyablePV,
+                                          NoncopyablePV> type;
+        };
+    }
+
     template <typename NumericType>
-    class PointView
+    class PointView :
+        public detail::PointViewCopyabilityBase <NumericType>::type
     {
         public:
 
@@ -75,8 +106,30 @@ namespace wobbly
                 return *this;
             }
 
-            PointView (PointView <NumericType> const &p) = delete;
-            PointView & operator= (PointView <NumericType> const &p) = delete;
+            /* Copy constructor and assignment operator enabled only if the view
+             * is truly just observing and has no write access to the point,
+             * see detail::PointViewCopyabilityBase */
+            PointView (PointView <NumericType> const &p) :
+                array (p.array),
+                offset (p.offset)
+            {
+            }
+
+            friend void swap (PointView <NumericType> &first,
+                              PointView <NumericType> &second)
+            {
+                using std::swap;
+                swap (first.array, second.array);
+                swap (first.offset, second.offset);
+            }
+
+            PointView &
+            operator= (PointView <NumericType> const &p)
+            {
+                PointView <NumericType> copy (p);
+                swap (*this, copy);
+                return *this;
+            }
 
             /* cppcheck thinks this is a constructor, so we need to suppress
              * a constructor warning here.
@@ -88,7 +141,7 @@ namespace wobbly
             }
 
             template <size_t Offset>
-            NumericType get () const
+            NumericType const & get () const
             {
                 static_assert (Offset < 2, "Offset must be < 2");
                 return array[offset + Offset];
@@ -207,23 +260,22 @@ namespace wobbly
     {
         public:
 
-             class Lifetime;
-             typedef std::unique_ptr <Lifetime,
-                                      std::function <void (Lifetime *)> > LTH;
+             class GrabStrategy;
+             typedef std::unique_ptr <GrabStrategy> LTH;
 
              class Storage
              {
                  public:
 
                      virtual ~Storage () {};
-                     virtual void Lock (size_t index) = 0;
-                     virtual void Unlock (size_t index) = 0;
+                     virtual void Lock (size_t i) = 0;
+                     virtual void Unlock (size_t i) = 0;
              };
 
              Anchor (wobbly::PointView <double> &&point,
                      LTH                        &&lifetime,
                      Storage                    &storage,
-                     size_t                     index);
+                     size_t                     i);
              ~Anchor ();
              Anchor (Anchor &&);
 
@@ -266,7 +318,8 @@ namespace wobbly
              * object. Integrating the model after the point has been moved
              * will effectively cause force to be exerted on all the other
              * points. */
-            wobbly::Anchor GrabAnchor (Point const &grab);
+            wobbly::Anchor
+            GrabAnchor (Point const &grab) throw (std::runtime_error);
 
             /* Performs a single integration per 16 ms in millisecondsDelta */
             bool Step (unsigned int millisecondsDelta);
