@@ -3,9 +3,11 @@ env:
  # GNU C/C++ Build
  - CC_OVERLOAD=gcc
    CXX_OVERLOAD=g++
+   CMAKE_OPTIONS="-DPOLYSQUARE_USE_VERAPP=OFF"
  # Clang Build
  - CC_OVERLOAD=clang
    CXX_OVERLOAD=clang++
+   CMAKE_OPTIONS="-DPOLYSQUARE_USE_VERAPP=OFF"
  # Clang Static Analysis
  - SCAN_BUILD=1  
  # GCov Coverage Build

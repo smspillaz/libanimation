@@ -14,6 +14,7 @@
 
 #include <array>
 #include <memory>
+#include <type_traits>
 
 #include <boost/geometry/geometry.hpp>
 #include <boost/geometry/geometries/register/point.hpp>
@@ -256,39 +257,15 @@ namespace boost
 
 namespace wobbly
 {
-    class Anchor
+    class MovableAnchor
     {
         public:
 
-             class GrabStrategy;
-             typedef std::unique_ptr <GrabStrategy> LTH;
-
-             class Storage
-             {
-                 public:
-
-                     virtual ~Storage () {};
-                     virtual void Lock (size_t i) = 0;
-                     virtual void Unlock (size_t i) = 0;
-             };
-
-             Anchor (wobbly::PointView <double> &&point,
-                     LTH                        &&lifetime,
-                     Storage                    &storage,
-                     size_t                     i);
-             ~Anchor ();
-             Anchor (Anchor &&);
-
-             void MoveBy (Point const &delta);
-
-        private:
-
-            Anchor (const Anchor &) = delete;
-            Anchor & operator= (const Anchor &) = delete;
-
-            struct Private;
-            std::unique_ptr <Private> priv;
+            virtual ~MovableAnchor () = default;
+            virtual void MoveBy (Vector const &delta) noexcept (true) = 0;
     };
+
+    typedef std::unique_ptr <MovableAnchor> Anchor;
 
     class Model
     {
@@ -311,7 +288,7 @@ namespace wobbly
             Model (Model const &other);
             ~Model ();
 
-            /* This function will cause a point on the sprint mesh closest
+            /* This function will cause a point on the spring mesh closest
              * to grab in absolute terms to become immobile in the mesh.
              *
              * The resulting point can be moved freely by the returned
@@ -320,6 +297,17 @@ namespace wobbly
              * points. */
             wobbly::Anchor
             GrabAnchor (Point const &grab) throw (std::runtime_error);
+
+            /* This function will insert a new point in the spring
+             * mesh which is immobile, with springs from it to its
+             * two nearest neighbours.
+             *
+             * The resulting point can be moved freely by the returned object.
+             * As above, integrating the model after moving the point will
+             * effectively cause force to be exerted on all other non-immobile
+             * points in the mesh */
+            wobbly::Anchor
+            InsertAnchor (Point const &grab) throw (std::runtime_error);
 
             /* Performs a single integration per 16 ms in millisecondsDelta */
             bool Step (unsigned int millisecondsDelta);
@@ -333,7 +321,7 @@ namespace wobbly
             std::array <Point, 4> const Extremes () const;
 
             /* These functions will attempt to move and resize
-             * the model relative to its target position, however,
+             * the model relative to its t position, however,
              * caution should be exercised when using them.
              *
              * A full integration until the model has reached equillibrium

@@ -62,74 +62,18 @@ namespace boost
 
 namespace wobbly
 {
-    namespace collections
+    template <class T, class F, class... A>
+    struct HasNoExceptMemFn
     {
-        namespace detail
-        {
-            /* Count down until we have all distances */
-            template <typename Function,
-                      typename Collection,
-                      typename IteratorTuple,
-                      size_t   N>
-            struct PreserveIterator
-            {
-                IteratorTuple
-                operator () (Function      const &function,
-                             Collection          &collection,
-                             IteratorTuple const &tuple)
-                {
-                    /* We need to call std::begin twice as the value of it
-                     * may change after we've called our iterator-modifying
-                     * function */
-                    auto distance = std::distance (std::begin (collection),
-                                                   std::get <N - 1> (tuple));
-                    auto result (PreserveIterator <Function,
-                                                   Collection,
-                                                   IteratorTuple,
-                                                   N - 1> () (function,
-                                                              collection,
-                                                              tuple));
-                    std::get <N - 1> (result) = std::begin (collection) +
-                                                distance;
-                    return result;
-                }
-            };
+        static constexpr bool value =
+            noexcept (((std::declval <T> ()).*F ()) (std::declval <A> ()...));
+    };
 
-            /* Start counting back up again */
-            template <typename Function,
-                      typename Collection,
-                      typename IteratorTuple>
-            struct PreserveIterator <Function, Collection, IteratorTuple, 0>
-            {
-                IteratorTuple
-                operator () (Function      const &function,
-                             Collection          &collection,
-                             IteratorTuple const &tuple)
-                {
-                    function ();
-                    return IteratorTuple ();
-                }
-            };
-        }
-
-        template <typename Function,
-                  typename Collection,
-                  typename IteratorTuple>
-        IteratorTuple
-        KeepIteratorsAlive (Function      const &function,
-                            Collection          &collection,
-                            IteratorTuple const &tuple)
-        {
-            typedef Function F;
-            typedef Collection C;
-            typedef IteratorTuple T;
-            constexpr size_t const S = std::tuple_size <IteratorTuple>::value;
-
-            return detail::PreserveIterator <F, C, T, S> () (function,
-                                                             collection,
-                                                             tuple);
-        }
-    }
+    template <typename Object, typename MemFn>
+    struct EnableIfHasNoExceptFn :
+        public std::enable_if <HasNoExceptMemFn <Object, MemFn>::value>::type
+    {
+    };
 
     namespace geometry
     {
@@ -253,48 +197,6 @@ namespace wobbly
             assert (nearestIndex);
             return *nearestIndex;
         }
-
-        size_t
-        ClosestNeighbour (size_t              initial,
-                          wobbly::MeshArray   &points,
-                          wobbly::Point const &pos)
-        {
-            size_t const width = config::Width;
-
-            xstd::optional <size_t> nearestIndex;
-            double distance = std::numeric_limits <double>::max ();
-
-            assert (points.size () == wobbly::config::ArraySize);
-
-            std::array <size_t, 4> neighbourIndices =
-            {
-                {
-                    /* left (or right) */
-                    initial % width == 0 ? initial + 1 : initial - 1,
-                    /* top (or bottom) */
-                    initial / width == 0 ? initial + width : initial - width,
-                    /* right (or left) */
-                    initial % width == (width - 1) ? initial - 1 : initial + 1,
-                    /* bottom (or top) */
-                    initial / width ==
-                        (width - 1) ? initial - width : initial + width
-                }
-            };
-
-            for (size_t neighbour : neighbourIndices)
-            {
-                wobbly::PointView <double> view (points, neighbour);
-                double objectDistance = bg::distance (pos, view);
-                if (objectDistance < distance)
-                {
-                    nearestIndex = neighbour;
-                    distance = objectDistance;
-                }
-            }
-
-            assert (nearestIndex);
-            return *nearestIndex;
-        }
     }
 
     class Spring
@@ -406,12 +308,12 @@ namespace wobbly
         private:
 
             typedef std::function <size_t ()> IDFetchStrategy;
-            Spring (PointView<double>       &&forceA,
-                    PointView<double>       &&forceB,
-                    PointView<const double> &&posA,
-                    PointView<const double> &&posB,
-                    Vector                  distance,
-                    IDFetchStrategy const   &fetchID);
+            Spring (PointView <double>       &&forceA,
+                    PointView <double>       &&forceB,
+                    PointView <const double> &&posA,
+                    PointView <const double> &&posB,
+                    Vector                   distance,
+                    IDFetchStrategy const    &fetchID);
 
             PointView <double> mutable forceA;
             PointView <double> mutable forceB;
@@ -428,8 +330,7 @@ namespace wobbly
     };
 
     template <int N>
-    class TrackedAnchors :
-        public Anchor::Storage
+    class TrackedAnchors
     {
         public:
 
@@ -440,7 +341,7 @@ namespace wobbly
                 anchors.fill (0);
             }
 
-            void Lock (size_t index) override
+            void Lock (size_t index)
             {
                 /* Keep track of the first-anchor value */
                 unsigned int const previousValue = anchors[index]++;
@@ -448,9 +349,10 @@ namespace wobbly
                     firstAnchor = index;
             }
 
-            void Unlock (size_t index) override
+            void Unlock (size_t index)
             {
                 unsigned int const currentValue = --anchors[index];
+
                 bool const firstAnchorIsThisIndex =
                     firstAnchor && *firstAnchor == index;
 
@@ -488,6 +390,9 @@ namespace wobbly
             }
 
         private:
+
+            TrackedAnchors (TrackedAnchors const &) = delete;
+            TrackedAnchors & operator= (TrackedAnchors const &) = delete;
 
             std::array <unsigned int, N> anchors;
             xstd::optional <size_t> firstAnchor;
@@ -546,6 +451,11 @@ namespace wobbly
                 return resource;
             }
 
+            operator Resource & ()
+            {
+                return resource;
+            }
+
         private:
 
             static void Nullify (TemporaryOwner &owner)
@@ -571,15 +481,20 @@ namespace wobbly
             {
                 public:
 
-                    Handle (size_t id) :
-                        id (id)
+                    typedef std::function <void (wobbly::Vector const &)> Move;
+
+                    Handle (size_t     id,
+                            Move const &moveBy) :
+                        id (id),
+                        moveBy (moveBy)
                     {
                     }
 
                     Handle (Handle &&handle) noexcept (true) :
-                        id (std::move (handle.id))
+                        id (std::move (handle.id)),
+                        moveBy (std::move (handle.moveBy))
                     {
-                        handle.id = 0;
+                        Nullify (handle);
                     }
 
                     Handle & operator= (Handle &&handle) noexcept (true)
@@ -588,9 +503,19 @@ namespace wobbly
                             return *this;
 
                         id = std::move (handle.id);
-                        handle.id = 0;
+                        moveBy = std::move (handle.moveBy);
+
+                        Nullify (handle);
 
                         return *this;
+                    }
+
+                    void MoveBy (wobbly::Vector const &delta)
+                    {
+                        assert (moveBy && id);
+
+                        if (id == 1)
+                            moveBy (delta);
                     }
 
                     operator size_t () const
@@ -600,8 +525,18 @@ namespace wobbly
 
                 private:
 
+                    static void Nullify (Handle &handle) noexcept (true)
+                    {
+                        handle.id = 0;
+                        handle.moveBy = Move ();
+                    }
+
                     size_t id;
+                    Move   moveBy;
+
             };
+
+            typedef TemporaryOwner <Handle> OwnedHandle;
 
             TargetMesh (OriginRecalcStrategy const &recalc);
 
@@ -617,11 +552,57 @@ namespace wobbly
                 return mPoints;
             }
 
+            template <typename TargetsFunc>
+            void WithEachActiveTarget (TargetsFunc const &func) const
+            {
+                if (!activationCount)
+                    return;
+
+                for (size_t i = 0; i < config::TotalIndices; ++i)
+                {
+                    PointView <double const> target (mPoints, i);
+                    func (target, i);
+                }
+            }
+
         private:
 
             MeshArray            mPoints;
             size_t               activationCount;
             OriginRecalcStrategy origin;
+    };
+
+    template <typename Strategy,
+              typename = EnableIfHasNoExceptFn <Strategy,
+                                                decltype (&Strategy::MoveBy)>>
+    class ConstrainingAnchor :
+        public MovableAnchor
+    {
+        public:
+
+             template <typename... Args>
+             ConstrainingAnchor (TargetMesh::OwnedHandle &&handle,
+                                 Args&&...               args) :
+                 handle (std::move (handle)),
+                 strategy (std::forward <Args> (args)...)
+             {
+             }
+
+             void MoveBy (Point const &delta) noexcept (true)
+             {
+                 TargetMesh::Handle &hnd (handle);
+                 hnd.MoveBy (delta);
+                 strategy.MoveBy (delta);
+             }
+
+        private:
+
+            ConstrainingAnchor (const ConstrainingAnchor &) = delete;
+            ConstrainingAnchor &
+            operator= (const ConstrainingAnchor &) = delete;
+
+            TargetMesh::OwnedHandle handle;
+            Strategy                strategy;
     };
 
     class BezierMesh
@@ -662,16 +643,16 @@ namespace wobbly
     {
         public:
 
-            ConstrainmentStep (double    const &threshold,
-                               MeshArray const &estimated);
+            ConstrainmentStep (double     const &threshold,
+                               TargetMesh const &estimated);
 
             bool operator () (MeshArray         &points,
                               AnchorArray const &anchors);
 
         private:
 
-            double    const &threshold;
-            MeshArray const &estimated;
+            double     const &threshold;
+            TargetMesh const &estimated;
     };
 
     /* AnchoredIntegration wraps an IntegrationStrategy and performs it on
@@ -692,10 +673,9 @@ namespace wobbly
                               double            friction)
             {
                 bool more = false;
-                auto const resetAction =
-                    [this](size_t i) {
-                        strategy.Reset (i);
-                    };
+                auto const resetAction = [this](size_t i) {
+                    strategy.Reset (i);
+                };
                 auto const stepAction =
                     [this, friction, &positions, &forces, &more](size_t i) {
                         more |= strategy.Step (i,
@@ -747,17 +727,6 @@ namespace wobbly
         private:
 
             MeshArray velocities;
-    };
-
-    class Anchor::GrabStrategy
-    {
-        public:
-
-            virtual ~GrabStrategy () {};
-
-            virtual void MoveBy (wobbly::Point const &delta)
-            {
-            }
     };
 
     class SpringMesh
@@ -814,23 +783,22 @@ namespace wobbly
                         Spring steal (std::move (*it));
                         mSprings.erase (it);
 
-                        auto const replacer =
-                            [this](Spring &&spring) {
-                                auto const idExists =
-                                    [this, &spring](Spring::ID const &id) {
-                                        return spring.HasID (id);
-                                    };
+                        auto const replacer = [this](Spring &&spring) {
+                            auto const idExists =
+                                [this, &spring](Spring::ID const &id) {
+                                    return spring.HasID (id);
+                                };
 
-                                auto exists =
-                                    std::remove_if (std::begin (mPending),
-                                                    std::end (mPending),
-                                                    idExists);
+                            auto exists =
+                                std::remove_if (std::begin (mPending),
+                                                std::end (mPending),
+                                                idExists);
 
-                                if (exists != mPending.end ())
-                                    mPending.erase (exists);
-                                else
-                                    mSprings.emplace_back (std::move (spring));
-                            };
+                            if (exists != mPending.end ())
+                                mPending.erase (exists);
+                            else
+                                mSprings.emplace_back (std::move (spring));
+                        };
 
                        TemporaryOwner <Spring> tmp (std::move (steal),
                                                     replacer);
@@ -853,23 +821,22 @@ namespace wobbly
 
                         mSprings.emplace_back (std::move (package.spring));
 
-                        auto const remover =
-                           [this](Spring::ID &&id) {
-                                auto const predicate =
-                                    [this, &id](Spring const &spring) {
-                                        return spring.HasID (id);
-                                    };
+                        auto const remover = [this](Spring::ID &&id) {
+                            auto const predicate =
+                                [this, &id](Spring const &spring) {
+                                    return spring.HasID (id);
+                                };
 
-                                auto exists =
-                                    std::remove_if (std::begin (mSprings),
-                                                    std::end (mSprings),
-                                                    predicate);
+                            auto exists =
+                                std::remove_if (std::begin (mSprings),
+                                                std::end (mSprings),
+                                                predicate);
 
-                                if (exists == mSprings.end ())
-                                    mPending.emplace_back (std::move (id));
-                                else
-                                    mSprings.erase (exists);
-                            };
+                            if (exists == mSprings.end ())
+                                mPending.emplace_back (std::move (id));
+                            else
+                                mSprings.erase (exists);
+                        };
 
                         TemporaryOwner <Spring::ID> tmp (std::move (package.id),
                                                          remover);
@@ -888,7 +855,15 @@ namespace wobbly
             typedef PointView <double const> DCPV;
             typedef std::function <DCPV (Spring const &)> PosPreference;
 
-            Anchor::LTH
+            struct InstallResult
+            {
+                TemporaryOwner <Spring> stolen;
+                TemporaryOwner <Spring::ID> first;
+                TemporaryOwner <Spring::ID> second;
+                std::unique_ptr <double[]> data;
+            };
+
+            InstallResult
             InstallAnchorSprings (Point              const &installationPoint,
                                   PosPreference const &firstPref,
                                   PosPreference const &secondPref);
@@ -924,8 +899,8 @@ namespace wobbly
                 mesh.Scale (scaleFactor);
             }
 
-            Anchor::LTH
-            InstallAnchorSprings (Point                          const &install,
+            SpringMesh::InstallResult
+            InstallAnchorSprings (Point                     const &install,
                                   SpringMesh::PosPreference const &first,
                                   SpringMesh::PosPreference const &second)
             {
@@ -1120,8 +1095,8 @@ wobbly::SpringMesh::CalculateForces (double springConstant) const
      * of multiple springs so these functions may cause a force to be updated
      * multiple (different) times */
     mSprings.Each ([&more, &springConstant](Spring const &spring) {
-                       more |= spring.ApplyForces (springConstant);
-                   });
+        more |= spring.ApplyForces (springConstant);
+    });
 
     return { more, mForces };
 }
