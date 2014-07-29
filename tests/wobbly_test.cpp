@@ -551,6 +551,9 @@ namespace
             return GetParams ([&translation](wobbly::Point &point) {
                  /* Scale on center */
                 bg::subtract_point (point, translation);
+                /* Older versions of cppcheck have trouble seeing through
+                 * the lambda */
+                // cppcheck-suppress unreachableCode
                 bg::multiply_value (point, 1.1);
                 bg::add_point (point, translation);
             });
@@ -563,6 +566,9 @@ namespace
             return GetParams ([&translation](wobbly::Point &point) {
                  /* Scale on center */
                 bg::subtract_point (point, translation);
+                /* Older versions of cppcheck have trouble seeing through
+                 * the lambda */
+                // cppcheck-suppress unreachableCode
                 bg::divide_value (point, 1.1);
                 bg::add_point (point, translation);
             });
@@ -1908,14 +1914,14 @@ namespace
         public:
 
             ConstrainmentStep () :
+                range (10),
+                width (TextureWidth),
+                height (TextureHeight),
                 targets ([this](wobbly::MeshArray &mesh){
                     InitializePositionsWithDimensions (mesh,
                                                        TextureWidth,
                                                        TextureHeight);
                 }),
-                range (10),
-                width (TextureWidth),
-                height (TextureHeight),
                 constrainment (range, targets)
             {
                 InitializePositionsWithDimensions (positions,
@@ -1923,13 +1929,14 @@ namespace
                                                    TextureHeight);
             }
 
+            double                    range;
+            double                    width;
+            double                    height;
+
             wobbly::TargetMesh targets;
             wobbly::MeshArray positions;
             wobbly::AnchorArray anchors;
 
-            double                    range;
-            double                    width;
-            double                    height;
             wobbly::ConstrainmentStep constrainment;
     };
 
