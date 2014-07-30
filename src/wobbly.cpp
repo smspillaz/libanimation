@@ -665,6 +665,7 @@ namespace
                                                PosFetch        fetch) {
                 /* Lookup the index of each of the positions referenced in the
                  * spring and then fetch from the target array */
+                // cppcheck-suppress unreachableCode
                 for (size_t i = 0; i < config::TotalIndices; ++i)
                 {
                     PointView <double const> position (points, i);
@@ -690,6 +691,7 @@ namespace
 
                 typedef SpringMesh::PosPreference PP;
 
+                // cppcheck-suppress unreachableCode
                 return active ? PP ([fetch, &getTarget](Spring const &spring) {
                                         auto args = getTarget (spring, fetch);
                                         typedef wobbly::PointView <double const>
@@ -909,6 +911,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
      * each spring and then apply correction as appropriate before even
      * starting to integrate the model
      */
+    // cppcheck-suppress unreachableCode
     return targets.PerformIfActive ([this, &points](MeshArray const &targets) {
         bool ret = false;
 
