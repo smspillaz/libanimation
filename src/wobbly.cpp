@@ -690,14 +690,14 @@ namespace
 
                 typedef SpringMesh::PosPreference PP;
 
-                return active ? PP ([&fetch, &getTarget](Spring const &spring) {
+                return active ? PP ([fetch, &getTarget](Spring const &spring) {
                                         auto args = getTarget (spring, fetch);
                                         typedef wobbly::PointView <double const>
                                                 CDPV;
                                         return CDPV (std::get <0> (args),
                                                      std::get <1> (args));
                                     }) :
-                                PP ([&fetch](Spring const &spring) {
+                                PP ([fetch](Spring const &spring) {
                                         return (spring.*fetch) ();
                                     });
             };

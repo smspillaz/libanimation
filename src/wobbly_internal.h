@@ -303,7 +303,7 @@ namespace wobbly
                                   PointView <double const> &&posB,
                                   Vector             const &distance);
 
-            static constexpr double ClipThreshold = 0.25;
+            static constexpr double ClipThreshold = 0.5;
 
         private:
 
@@ -406,8 +406,8 @@ namespace wobbly
 
     template <typename T>
     struct EnableIfMoveOnly :
-        public std::enable_if <std::is_nothrow_move_assignable <T>::value &&
-                               std::is_nothrow_move_constructible <T>::value &&
+        public std::enable_if <std::is_move_assignable <T>::value &&
+                               std::is_move_constructible <T>::value &&
                                !std::is_copy_assignable <T>::value &&
                                !std::is_copy_constructible <T>::value,
                                Empty>::type
@@ -415,9 +415,9 @@ namespace wobbly
     };
 
     template <typename T>
-    struct EnableIfNothrowMovable :
-        public std::enable_if <std::is_nothrow_move_assignable <T>::value &&
-                               std::is_nothrow_move_constructible <T>::value,
+    struct EnableIfMovable :
+        public std::enable_if <std::is_move_assignable <T>::value &&
+                               std::is_move_constructible <T>::value,
                                Empty>::type
     {
     };
@@ -450,7 +450,7 @@ namespace wobbly
 
     template <typename Resource,
               typename = EnableIfNothrowDefaultCtorable <Resource>,
-              typename = EnableIfNothrowMovable <Resource>>
+              typename = EnableIfMovable <Resource>>
     class MoveOnly
     {
         public:
@@ -460,13 +460,20 @@ namespace wobbly
             {
             }
 
-            MoveOnly (MoveOnly &&movable) noexcept :
+            static constexpr bool nothrowMoveConstructible =
+                std::is_nothrow_move_constructible <Resource>::value;
+            static constexpr bool nothrowMoveAssignable =
+                std::is_nothrow_move_constructible <Resource>::value;
+
+            /* Inherit exception guarantees */
+            MoveOnly (MoveOnly &&movable) noexcept (nothrowMoveConstructible) :
                 resource (std::move (movable.resource))
             {
                 Nullify (movable);
             }
 
-            MoveOnly & operator= (MoveOnly &&movable) noexcept
+            MoveOnly &
+            operator= (MoveOnly &&movable) noexcept (nothrowMoveAssignable)
             {
                 if (this == &movable)
                     return *this;
@@ -516,6 +523,11 @@ namespace wobbly
 
             typedef std::function <void (Resource &&)> Release;
 
+            static constexpr bool NTMoveCtorable =
+                std::is_nothrow_move_constructible <Resource>::value;
+            static constexpr bool NTMoveAssignable =
+                std::is_nothrow_move_constructible <Resource>::value;
+
             TemporaryOwner (Resource      &&resource,
                             Release const &release) :
                 resource (std::move (resource)),
@@ -523,14 +535,15 @@ namespace wobbly
             {
             }
 
-            TemporaryOwner (TemporaryOwner &&owner) noexcept (true) :
+            TemporaryOwner (TemporaryOwner &&owner) noexcept (NTMoveCtorable) :
                 resource (std::move (owner.resource)),
                 release (std::move (owner.release))
             {
                 Nullify (owner);
             }
 
-            TemporaryOwner & operator= (TemporaryOwner &&owner) noexcept (true)
+            TemporaryOwner &
+            operator= (TemporaryOwner &&owner) noexcept (NTMoveAssignable)
             {
                 resource = std::move (owner.resource);
                 release = std::move (owner.release);
@@ -569,8 +582,6 @@ namespace wobbly
             Resource resource;
             Release  release;
     };
-
-
 
     class TargetMesh
     {
@@ -739,23 +750,33 @@ namespace wobbly
                               AnchorArray const &anchors,
                               double            friction)
             {
-                bool more = false;
                 auto const resetAction = [this](size_t i) {
                     strategy.Reset (i);
                 };
                 auto const stepAction =
-                    [this, friction, &positions, &forces, &more](size_t i) {
-                        more |= strategy.Step (i,
-                                               1.0,
-                                               friction,
-                                               Model::Mass,
-                                               positions,
-                                               forces);
+                    [this, friction, &positions, &forces](size_t i) {
+                        strategy.Step (i,
+                                       1.0,
+                                       friction,
+                                       Model::Mass,
+                                       positions,
+                                       forces);
                     };
 
                 anchors.PerformActions (resetAction, stepAction);
 
-               return more;
+                wobbly::Vector velocity;
+                for (size_t i = 0; i < config::TotalIndices; ++i)
+                {
+                    wobbly::PointView <double> pv (strategy.Velocities (), i);
+                    wobbly::Point p;
+                    bg::assign (p, pv);
+                    geometry::MakeAbsolute (p);
+                    bg::add_point (velocity, p);
+                }
+
+                return bg::get <0> (velocity) > 2.0 ||
+                       bg::get <1> (velocity) > 2.0;
             }
 
         private:
@@ -790,6 +811,10 @@ namespace wobbly
                        double          mass,
                        MeshArray       &positions,
                        MeshArray const &forces);
+            MeshArray & Velocities ()
+            {
+                return velocities;
+            }
 
         private:
 
@@ -1045,6 +1070,7 @@ wobbly::EulerIntegrate (double                           time,
     wobbly::Vector frictionForce;
     bg::assign_point (frictionForce, velocity);
     bg::multiply_value (frictionForce, friction);
+
     bg::fixups::subtract_point (totalForce, frictionForce);
 
     /* First apply velocity change for force
@@ -1052,7 +1078,7 @@ wobbly::EulerIntegrate (double                           time,
     euler::ApplyAccelerativeForce (velocity, totalForce, mass, time);
 
     /* Clip velocity */
-    geometry::ResetIfCloseToZero (velocity, 0.05);
+    geometry::ResetIfCloseToZero (velocity, 0.1);
 
     /* Distance travelled will be
      *
@@ -1154,18 +1180,32 @@ wobbly::Spring::ApplyForces (double springConstant) const
 inline wobbly::SpringMesh::CalculationResult
 wobbly::SpringMesh::CalculateForces (double springConstant) const
 {
-    bool more = false;
     /* Reset all forces back to zero */
     mForces.fill (0.0);
 
     /* Accumulate force on each end of each spring. Some points are endpoints
      * of multiple springs so these functions may cause a force to be updated
      * multiple (different) times */
-    mSprings.Each ([&more, &springConstant](Spring const &spring) {
-        more |= spring.ApplyForces (springConstant);
+    mSprings.Each ([&springConstant](Spring const &spring) {
+        spring.ApplyForces (springConstant);
     });
 
-    return { more, mForces };
+    wobbly::Vector force;
+
+    for (size_t i = 0; i < config::TotalIndices; ++i)
+    {
+        wobbly::PointView <double> pv (mForces, i);
+        wobbly::Point p;
+        bg::assign (p, pv);
+        geometry::MakeAbsolute (p);
+        bg::add_point (force, p);
+    }
+
+    return {
+               bg::get <0> (force) > 20.0 ||
+               bg::get <1> (force) > 20.0,
+               mForces
+           };
 }
 
 inline wobbly::Point

@@ -1769,6 +1769,12 @@ namespace
                                   double,
                                   wobbly::MeshArray       &,
                                   wobbly::MeshArray const &));
+
+        wobbly::MeshArray & Velocities ()
+        {
+            static wobbly::MeshArray array;
+            return array;
+        }
     };
 
     class AnchoredIntegrationLoop :
@@ -1929,7 +1935,7 @@ namespace
         wobbly::AnchorArray anchors;
         double const springConstant = 1.0;
         double const springFriction = 1.0;
-        wobbly::Vector const springDimensions (1.0, 1.0);
+        wobbly::Vector const springDimensions (10.0, 10.0);
 
         positions.fill (0.0);
 
