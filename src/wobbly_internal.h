@@ -400,17 +400,116 @@ namespace wobbly
 
     typedef TrackedAnchors <config::TotalIndices> AnchorArray;
 
+    struct Empty
+    {
+    };
+
     template <typename T>
     struct EnableIfMoveOnly :
         public std::enable_if <std::is_nothrow_move_assignable <T>::value &&
                                std::is_nothrow_move_constructible <T>::value &&
                                !std::is_copy_assignable <T>::value &&
-                               !std::is_copy_constructible <T>::value>
+                               !std::is_copy_constructible <T>::value,
+                               Empty>::type
+    {
+    };
+
+    template <typename T>
+    struct EnableIfNothrowMovable :
+        public std::enable_if <std::is_nothrow_move_assignable <T>::value &&
+                               std::is_nothrow_move_constructible <T>::value,
+                               Empty>::type
+    {
+    };
+
+    template <typename F, typename... A>
+    struct ReturnDefaultCtorable
+    {
+        typedef typename std::result_of <F (A...)>::type R;
+        static constexpr bool value = std::is_default_constructible <R>::value;
+    };
+
+    template <typename F, typename... A>
+    struct EnableIfReturnDefaultCtorable :
+        public std::enable_if <ReturnDefaultCtorable <F (A...)>::value,
+                               Empty>::type
+    {
+    };
+
+    template <typename T>
+    struct NothrowDefaultCtorable :
+        public std::is_nothrow_default_constructible <T>
+    {
+    };
+
+    template <typename T>
+    struct EnableIfNothrowDefaultCtorable :
+        public std::enable_if <NothrowDefaultCtorable <T>::value, Empty>::type
     {
     };
 
     template <typename Resource,
-              typename = typename EnableIfMoveOnly <Resource>::type>
+              typename = EnableIfNothrowDefaultCtorable <Resource>,
+              typename = EnableIfNothrowMovable <Resource>>
+    class MoveOnly
+    {
+        public:
+
+            MoveOnly (Resource &&resource) :
+                resource (std::move (resource))
+            {
+            }
+
+            MoveOnly (MoveOnly &&movable) noexcept :
+                resource (std::move (movable.resource))
+            {
+                Nullify (movable);
+            }
+
+            MoveOnly & operator= (MoveOnly &&movable) noexcept
+            {
+                if (this == &movable)
+                    return *this;
+
+                resource = std::move (movable.resource);
+                Nullify (movable);
+
+                return *this;
+            }
+
+            operator Resource const & () const
+            {
+                return resource;
+            }
+
+        private:
+
+            MoveOnly (MoveOnly const &movable) = delete;
+            MoveOnly & operator= (MoveOnly const &movable) = delete;
+
+            void Nullify (MoveOnly &movable)
+            {
+                movable.resource = Resource ();
+            }
+
+            Resource resource;
+    };
+
+    template <typename T>
+    struct EnableIfIsRvalueReference :
+        public std::enable_if <std::is_rvalue_reference <T>::value>::type
+    {
+    };
+
+    template <typename Resource,
+              typename = EnableIfIsRvalueReference <Resource>>
+    MoveOnly <Resource> MakeMoveOnly (Resource &&resource)
+    {
+        return MoveOnly <Resource> (std::forward <Resource> (resource));
+    }
+
+    template <typename Resource,
+              typename = EnableIfMoveOnly <Resource>>
     class TemporaryOwner
     {
         public:
@@ -471,76 +570,20 @@ namespace wobbly
             Release  release;
     };
 
+
+
     class TargetMesh
     {
         public:
 
             typedef std::function <void (MeshArray &)> OriginRecalcStrategy;
-
-            class Handle
-            {
-                public:
-
-                    typedef std::function <void (wobbly::Vector const &)> Move;
-
-                    Handle (size_t     id,
-                            Move const &moveBy) :
-                        id (id),
-                        moveBy (moveBy)
-                    {
-                    }
-
-                    Handle (Handle &&handle) noexcept (true) :
-                        id (std::move (handle.id)),
-                        moveBy (std::move (handle.moveBy))
-                    {
-                        Nullify (handle);
-                    }
-
-                    Handle & operator= (Handle &&handle) noexcept (true)
-                    {
-                        if (this == &handle)
-                            return *this;
-
-                        id = std::move (handle.id);
-                        moveBy = std::move (handle.moveBy);
-
-                        Nullify (handle);
-
-                        return *this;
-                    }
-
-                    void MoveBy (wobbly::Vector const &delta)
-                    {
-                        assert (moveBy && id);
-
-                        if (id == 1)
-                            moveBy (delta);
-                    }
-
-                    operator size_t () const
-                    {
-                        return id;
-                    }
-
-                private:
-
-                    static void Nullify (Handle &handle) noexcept (true)
-                    {
-                        handle.id = 0;
-                        handle.moveBy = Move ();
-                    }
-
-                    size_t id;
-                    Move   moveBy;
-
-            };
-
-            typedef TemporaryOwner <Handle> OwnedHandle;
+            typedef std::function <void (wobbly::Vector const &)> Move;
 
             TargetMesh (OriginRecalcStrategy const &recalc);
 
-            wobbly::TemporaryOwner <Handle> Activate () noexcept (true);
+            typedef TemporaryOwner <MoveOnly <Move>> Hnd;
+
+            Hnd Activate () noexcept (true);
 
             wobbly::MeshArray const & PointArray () const noexcept (true)
             {
@@ -552,20 +595,41 @@ namespace wobbly
                 return mPoints;
             }
 
-            template <typename TargetsFunc>
-            void WithEachActiveTarget (TargetsFunc const &func) const
-            {
-                if (!activationCount)
-                    return;
+            /* Calls some arbitrtary function and returns its return value
+             * if the mesh is active, with the first argument to that function
+             * being the target mesh and the following arguments being user
+             * provided */
+            template <typename F, typename... A>
+            using EnIfRetIsDefaultCtorable =
+                EnableIfReturnDefaultCtorable <F, A...>;
 
-                for (size_t i = 0; i < config::TotalIndices; ++i)
-                {
-                    PointView <double const> target (mPoints, i);
-                    func (target, i);
-                }
+            template <typename Function,
+                      typename... Args,
+                      typename = EnIfRetIsDefaultCtorable <Function,
+                                                           MeshArray const &,
+                                                           Args...>>
+            typename std::result_of <Function (MeshArray const &,
+                                               Args...)>::type
+            PerformIfActive (Function const &function, Args&&... args) const
+            {
+                if (Active ())
+                    return function (mPoints, args...);
+
+                typedef typename std::result_of <Function (MeshArray const &,
+                                                           Args...)>::type R;
+
+                return R ();
             }
 
         private:
+
+            /* We're only considered active if there is one handle holding
+             * the target mesh - any more and we can't guaruntee constrainment
+             * sensibily, so don't constrain at all */
+            bool Active () const noexcept
+            {
+                return activationCount == 1;
+            }
 
             MeshArray            mPoints;
             size_t               activationCount;
@@ -581,8 +645,8 @@ namespace wobbly
         public:
 
              template <typename... Args>
-             ConstrainingAnchor (TargetMesh::OwnedHandle &&handle,
-                                 Args&&...               args) :
+             ConstrainingAnchor (TargetMesh::Hnd &&handle,
+                                 Args&&...       args) :
                  handle (std::move (handle)),
                  strategy (std::forward <Args> (args)...)
              {
@@ -590,8 +654,11 @@ namespace wobbly
 
              void MoveBy (Point const &delta) noexcept (true)
              {
-                 TargetMesh::Handle &hnd (handle);
-                 hnd.MoveBy (delta);
+                 /* We have to unwrap handle a little bit */
+                 MoveOnly <TargetMesh::Move> &hnd (handle);
+                 TargetMesh::Move      const &moveBy (hnd);
+
+                 moveBy (delta);
                  strategy.MoveBy (delta);
              }
 
@@ -601,8 +668,8 @@ namespace wobbly
             ConstrainingAnchor &
             operator= (const ConstrainingAnchor &) = delete;
 
-            TargetMesh::OwnedHandle handle;
-            Strategy                strategy;
+            TargetMesh::Hnd handle;
+            Strategy        strategy;
     };
 
     class BezierMesh
@@ -644,7 +711,7 @@ namespace wobbly
         public:
 
             ConstrainmentStep (double     const &threshold,
-                               TargetMesh const &estimated);
+                               TargetMesh const &targets);
 
             bool operator () (MeshArray         &points,
                               AnchorArray const &anchors);
@@ -652,7 +719,7 @@ namespace wobbly
         private:
 
             double     const &threshold;
-            TargetMesh const &estimated;
+            TargetMesh const &targets;
     };
 
     /* AnchoredIntegration wraps an IntegrationStrategy and performs it on

@@ -197,6 +197,22 @@ namespace
         });
     }
 
+    TEST (Spring, MoveAssignToSelf)
+    {
+        SingleObjectStorage storageA, storageB;
+
+        EXPECT_EXIT ({
+            wobbly::Spring a (storageA.Force (),
+                              storageB.Force (),
+                              storageA.Position (),
+                              storageB.Position (),
+                              wobbly::Vector (0, 0));
+
+            a = std::move (a);
+            exit (0);
+        }, ExitedWithCode (0), "");
+    }
+
     class Springs :
         public ::testing::Test
     {
@@ -1167,13 +1183,13 @@ namespace
 
     typedef std::tuple <wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
 
-    class SpringBezierModelGrabs :
+    class SpringBezierModelGrabPositions :
         public SpringBezierModel,
         public WithParamInterface <SpringGrabParams>
     {
         public:
 
-            SpringBezierModelGrabs () :
+            SpringBezierModelGrabPositions () :
                 grabPosition (std::get <0> (GetParam ())),
                 movement (std::get <1> (GetParam ())),
                 extremeIndex (std::get <2> (GetParam ()))
@@ -1185,7 +1201,8 @@ namespace
             size_t              extremeIndex;
     };
 
-    TEST_P (SpringBezierModelGrabs, GrabsCorrectIndex)
+    /* Only tests the GrabIndex strategy */
+    TEST_P (SpringBezierModelGrabPositions, GrabsCorrectIndex)
     {
         wobbly::Anchor grab (model.GrabAnchor (grabPosition));
         grab->MoveBy (movement);
@@ -1197,7 +1214,7 @@ namespace
                      Eq (transformed));
     }
 
-    TEST_P (SpringBezierModelGrabs, AlwaysSettlesAtCurrentlyAnchoredPosition)
+    TEST_P (SpringBezierModelGrabPositions, SettlesAtCurrentlyAnchoredPosition)
     {
         /* Check that when we grab the model from each of the four corners
          * and move that anchor by 100, 100 that the model always settles
@@ -1231,7 +1248,7 @@ namespace
                           3)
     };
 
-    INSTANTIATE_TEST_CASE_P (Extremes, SpringBezierModelGrabs,
+    INSTANTIATE_TEST_CASE_P (Extremes, SpringBezierModelGrabPositions,
                              ValuesIn (springGrabParams));
                              
 
@@ -1302,21 +1319,6 @@ namespace
         EXPECT_THAT (model.Extremes (), ElementsAreArray (scaledExtremes));
     }
 
-    /* We can verify this by grabbing an anchor at a known position
-     * and then resizing the model. If the model has net force, then
-     * the anchor did not move */
-    TEST_F (SpringBezierModel, AnchorPositionsNotMovedAfterResize)
-    {
-        wobbly::Vector const grabPoint (TextureWidth,
-                                        TextureHeight);
-        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
-
-        model.ResizeModel (TextureWidthAfterResize,
-                           TextureHeightAfterResize);
-
-        EXPECT_TRUE (model.Step (1));
-    }
-
     TEST_F (SpringBezierModel, NetForceIsZeroAfterResizingSettledModel)
     {
         model.ResizeModel (TextureWidthAfterResize,
@@ -1333,6 +1335,56 @@ namespace
         /* We can assume that Extremes ()[0] is the top-left position as
          * the other tests enforce it being the minimum,minimum position */
         EXPECT_THAT (model.Extremes ()[0], Eq (position));
+    }
+
+    /* Tests for both the InstallPoint and GrabAnchor strategies */
+    template <typename AnchorStrategyFactory>
+    class SpringBezierModelAnchorStrategy :
+        public SpringBezierModel
+    {
+        public:
+
+            AnchorStrategyFactory createAnchorFor;
+    };
+
+    /* GrabAnchorStrategy grab a single point on the mesh and move it */
+    struct GrabAnchorStrategyFactory
+    {
+        wobbly::Anchor operator () (wobbly::Model       &model,
+                                    wobbly::Point const &grabPoint)
+        {
+            return model.GrabAnchor (grabPoint);
+        }
+    };
+
+    /* InstallAnchorStrategy installs a new anchor on the mesh */
+    struct InstallAnchorStrategyFactory
+    {
+        wobbly::Anchor operator () (wobbly::Model       &model,
+                                    wobbly::Point const &grabPoint)
+        {
+            return model.InsertAnchor (grabPoint);
+        }
+    };
+
+    typedef ::testing::Types <GrabAnchorStrategyFactory,
+                              InstallAnchorStrategyFactory> AnchorStrategyTypes;
+
+    TYPED_TEST_CASE (SpringBezierModelAnchorStrategy, AnchorStrategyTypes);
+
+    /* We can verify this by grabbing an anchor at a known position
+     * and then resizing the model. If the model has net force, then
+     * the anchor did not move */
+    TYPED_TEST (SpringBezierModelAnchorStrategy, AnchorNotMovedAfterResize)
+    {
+        wobbly::Vector const grabPoint (TextureWidth,
+                                        TextureHeight);
+        wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
+
+        this->model.ResizeModel (TextureWidthAfterResize,
+                                TextureHeightAfterResize);
+
+        EXPECT_TRUE (this->model.Step (1));
     }
 
     template <typename ParentGeometry>
@@ -1410,7 +1462,7 @@ namespace
     /* The only way we can test this is to perform operations dependent
      * on a target position and ensure that they are precise to the grab's
      * position */
-    TEST_F (SpringBezierModel, TargetPositionWithinRangeGrabbed)
+    TYPED_TEST (SpringBezierModelAnchorStrategy, TargetWithinRangeGrabbed)
     {
         /* Create an anchor on 0, 0 and then move it to 100, 100, then move
          * it back to 0, 0. The end result should be that the model position
@@ -1418,15 +1470,15 @@ namespace
          * so we need to do it this way */
 
         wobbly::Vector const grabPoint (0, 0);
-        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+        wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
 
         grab->MoveBy (wobbly::Point (100, 100));
-        model.MoveModelTo (wobbly::Point (0, 0));
+        this->model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
-        while (model.Step (1));
+        while (this->model.Step (1));
 
-        EXPECT_THAT (model.Extremes ()[0],
+        EXPECT_THAT (this->model.Extremes ()[0],
                      WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
                                                wobbly::Point (1.5, 1.5))));
     }
@@ -1434,7 +1486,7 @@ namespace
     /* The only way we can test this is to perform operations dependent
      * on a target position and ensure that they are precise to the grab's
      * position */
-    TEST_F (SpringBezierModel, TargetPositionWithinRangeAnchorChange)
+    TYPED_TEST (SpringBezierModelAnchorStrategy, AnchorsChangesDontAffectTarget)
     {
         /* Create an anchor on 0, 0, then at TextureWidth, 0 and move it by
          * 100, 100, then move the model it back to 0, 0. This checks if
@@ -1443,44 +1495,77 @@ namespace
 
         {
             wobbly::Vector const grabPoint (0, 0);
-            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+            wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                        grabPoint));
         }
 
         wobbly::Vector const grabPoint (TextureWidth, 0);
-        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+        wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                    grabPoint));
 
         grab->MoveBy (wobbly::Point (100, 100));
-        model.MoveModelTo (wobbly::Point (0, 0));
+        this->model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
-        while (model.Step (1));
+        while (this->model.Step (1));
 
-        EXPECT_THAT (model.Extremes ()[0],
+        EXPECT_THAT (this->model.Extremes ()[0],
                      WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
                                                wobbly::Point (1.5, 1.5))));
     }
 
-    TEST_F (SpringBezierModel, TargetPositionWithinRangeNotGrabbed)
+    TYPED_TEST (SpringBezierModelAnchorStrategy, TargetRemainsAfterRelease)
     {
         /* This time integrate the model for a short period while grabbed
          * and then move it to a new position. This should still cause its
          * target position to end up roughly in the same place */
         {
             wobbly::Vector const grabPoint (0, 0);
-            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
+            wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                        grabPoint));
 
             grab->MoveBy (wobbly::Point (100, 100));
-            model.Step (2);
+            this->model.Step (2);
         }
 
-        model.MoveModelTo (wobbly::Point (0, 0));
+        this->model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
-        while (model.Step (1));
+        while (this->model.Step (1));
 
-        EXPECT_THAT (model.Extremes ()[0],
+        EXPECT_THAT (this->model.Extremes ()[0],
                      WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
                                                wobbly::Point (1.5, 1.5))));
+    }
+
+    TYPED_TEST (SpringBezierModelAnchorStrategy, ForcesExistAfterMovingAnchor)
+    {
+        /* Create an anchor and move it. Step (0) should return true */
+        wobbly::Vector const grabPoint (0, 0);
+        wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                    grabPoint));
+
+        grab->MoveBy (wobbly::Point (100, 100));
+        EXPECT_TRUE (this->model.Step (0));
+    }
+
+    TYPED_TEST (SpringBezierModelAnchorStrategy, ForcesExistAfterReleaseAnchor)
+    {
+        {
+            /* Create an anchor and move it. Step (0) should return true */
+            wobbly::Vector const grabPoint (0, 0);
+            wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                        grabPoint));
+
+            grab->MoveBy (wobbly::Point (100, 100));
+
+            /* Step the model once, this will make the model unequal */
+            this->model.Step (1);
+
+            /* Grab goes away here but the model is still unequal */
+        }
+
+        EXPECT_TRUE (this->model.Step (0));
     }
 
     void GrabModelMoveAndStepASmallAmount (wobbly::Model &model)
@@ -1548,34 +1633,6 @@ namespace
 
         EXPECT_GT (bg::get <0> (lowerFrictionModel.Extremes ()[0]),
                    bg::get <0> (higherFrictionModel.Extremes ()[0]));
-    }
-
-    TEST_F (SpringBezierModel, StepZeroReturnsTrueOnGrabbingAndMovingAnchor)
-    {
-        /* Create an anchor and move it. Step (0) should return true */
-        wobbly::Vector const grabPoint (0, 0);
-        wobbly::Anchor grab (model.GrabAnchor (grabPoint));
-
-        grab->MoveBy (wobbly::Point (100, 100));
-        EXPECT_TRUE (model.Step (0));
-    }
-
-    TEST_F (SpringBezierModel, StepZeroReturnsTrueOnNonEquallibriumModel)
-    {
-        {
-            /* Create an anchor and move it. Step (0) should return true */
-            wobbly::Vector const grabPoint (0, 0);
-            wobbly::Anchor grab (model.GrabAnchor (grabPoint));
-
-            grab->MoveBy (wobbly::Point (100, 100));
-
-            /* Step the model once, this will make the model unequal */
-            model.Step (1);
-
-            /* Grab goes away here but the model is still unequal */
-        }
-
-        EXPECT_TRUE (model.Step (0));
     }
 
     class EulerIntegration :
@@ -1978,9 +2035,10 @@ namespace
     {
         wobbly::Point const movement (range * 2, 0);
         auto handleOwner (targets.Activate ());
-        wobbly::TargetMesh::Handle &handle (handleOwner);
+        wobbly::MoveOnly <wobbly::TargetMesh::Move> &handleWrap (handleOwner);
+        wobbly::TargetMesh::Move moveBy (handleWrap);
 
-        handle.MoveBy (movement);
+        moveBy (movement);
 
         /* Move the anchored point right by range * 2, the result should
          * be that every other point is p.x + range */
@@ -2024,7 +2082,7 @@ namespace
                                wobbly::config::Height) / 2);
             }
 
-            wobbly::TemporaryOwner <wobbly::TargetMesh::Handle> handle;
+            wobbly::TargetMesh::Hnd handle;
             size_t index;
             double ratio;
     };
