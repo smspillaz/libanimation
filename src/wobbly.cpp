@@ -691,8 +691,8 @@ namespace
 
                 typedef SpringMesh::PosPreference PP;
 
-                // cppcheck-suppress unreachableCode
                 return active ? PP ([fetch, &getTarget](Spring const &spring) {
+                                        // cppcheck-suppress unreachableCode
                                         auto args = getTarget (spring, fetch);
                                         typedef wobbly::PointView <double const>
                                                 CDPV;
@@ -913,6 +913,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
      */
     // cppcheck-suppress unreachableCode
     return targets.PerformIfActive ([this, &points](MeshArray const &targets) {
+        // cppcheck-suppress unreachableCode
         bool ret = false;
 
         for (size_t i = 0; i < config::TotalIndices; ++i)
