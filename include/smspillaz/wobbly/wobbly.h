@@ -82,7 +82,7 @@ namespace wobbly
             {
             }
 
-            PointView (NTM         *points,
+            PointView (NumericType *points,
                        std::size_t index) :
                 array (points),
                 offset (index * 2)

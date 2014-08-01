@@ -750,33 +750,23 @@ namespace wobbly
                               AnchorArray const &anchors,
                               double            friction)
             {
+                bool more = false;
                 auto const resetAction = [this](size_t i) {
                     strategy.Reset (i);
                 };
                 auto const stepAction =
-                    [this, friction, &positions, &forces](size_t i) {
-                        strategy.Step (i,
-                                       1.0,
-                                       friction,
-                                       Model::Mass,
-                                       positions,
-                                       forces);
+                    [this, friction, &positions, &forces, &more](size_t i) {
+                        more |= strategy.Step (i,
+                                               1.0,
+                                               friction,
+                                               Model::Mass,
+                                               positions,
+                                               forces);
                     };
 
                 anchors.PerformActions (resetAction, stepAction);
 
-                wobbly::Vector velocity;
-                for (size_t i = 0; i < config::TotalIndices; ++i)
-                {
-                    wobbly::PointView <double> pv (strategy.Velocities (), i);
-                    wobbly::Point p;
-                    bg::assign (p, pv);
-                    geometry::MakeAbsolute (p);
-                    bg::add_point (velocity, p);
-                }
-
-                return bg::get <0> (velocity) > 2.0 ||
-                       bg::get <1> (velocity) > 2.0;
+                return more;
             }
 
         private:
@@ -1180,30 +1170,19 @@ wobbly::Spring::ApplyForces (double springConstant) const
 inline wobbly::SpringMesh::CalculationResult
 wobbly::SpringMesh::CalculateForces (double springConstant) const
 {
+    bool more = false;
     /* Reset all forces back to zero */
     mForces.fill (0.0);
 
     /* Accumulate force on each end of each spring. Some points are endpoints
      * of multiple springs so these functions may cause a force to be updated
      * multiple (different) times */
-    mSprings.Each ([&springConstant](Spring const &spring) {
-        spring.ApplyForces (springConstant);
+    mSprings.Each ([&more, &springConstant](Spring const &spring) {
+        more |= spring.ApplyForces (springConstant);
     });
 
-    wobbly::Vector force;
-
-    for (size_t i = 0; i < config::TotalIndices; ++i)
-    {
-        wobbly::PointView <double> pv (mForces, i);
-        wobbly::Point p;
-        bg::assign (p, pv);
-        geometry::MakeAbsolute (p);
-        bg::add_point (force, p);
-    }
-
     return {
-               bg::get <0> (force) > 20.0 ||
-               bg::get <1> (force) > 20.0,
+               more,
                mForces
            };
 }

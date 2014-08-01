@@ -674,7 +674,7 @@ namespace
                      * default-constructible, but we can return a tuple
                      * with its arguments */
                     if (::bg::equals ((spring.*fetch) (), position))
-                        return std::make_tuple (targets, i);
+                        return std::make_tuple (targets.data (), i);
                 }
 
                 /* This is a bug */
@@ -911,7 +911,6 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
      * each spring and then apply correction as appropriate before even
      * starting to integrate the model
      */
-    // cppcheck-suppress unreachableCode
     return targets.PerformIfActive ([this, &points](MeshArray const &targets) {
         // cppcheck-suppress unreachableCode
         bool ret = false;

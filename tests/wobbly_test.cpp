@@ -1538,6 +1538,44 @@ namespace
                                                wobbly::Point (1.5, 1.5))));
     }
 
+    TYPED_TEST (SpringBezierModelAnchorStrategy, MoreAnchoredModelNeverSettles)
+    {
+        wobbly::Model oneAnchorModel (wobbly::Vector (0, 0),
+                                      TextureWidth,
+                                      TextureHeight);
+
+        wobbly::Point const firstGrabPoint (0, 0);
+        wobbly::Point const secondGrabPoint (TextureWidth, 0);
+
+        auto firstForOneAnchorModel (this->createAnchorFor (oneAnchorModel,
+                                                            firstGrabPoint));
+        auto firstForTwoAnchorModel (this->createAnchorFor (this->model,
+                                                            firstGrabPoint));
+        auto secondForTwoAnchorModel (this->createAnchorFor (this->model,
+                                                             secondGrabPoint));
+
+        wobbly::Vector const firstMovement (-100, 0);
+
+        firstForOneAnchorModel->MoveBy (firstMovement);
+        firstForTwoAnchorModel->MoveBy (firstMovement);
+
+        /* Keep integrating both models until one of them is settled. The
+         * result should be that the first model finishes while the second
+         * one does not */
+        bool continueFirstModel = true;
+        bool continueSecondModel = true;
+
+        while (continueFirstModel && continueSecondModel)
+        {
+            continueFirstModel = oneAnchorModel.Step (1);
+            continueSecondModel = this->model.Step (1);
+        }
+
+        EXPECT_FALSE (continueFirstModel);
+        EXPECT_TRUE (continueSecondModel);
+
+    }
+
     TYPED_TEST (SpringBezierModelAnchorStrategy, ForcesExistAfterMovingAnchor)
     {
         /* Create an anchor and move it. Step (0) should return true */
