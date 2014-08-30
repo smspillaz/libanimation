@@ -1466,17 +1466,19 @@ namespace
     {
         /* Create an anchor at the midpoint, move it by 100, 100 and then move
          * the entire model backwards by 100, 100. The result should be that
-         * the model's topleft most extreme will be around 0, 0. We will move the
-         * entire backwards and anchor by one step along the way and integrate each
-         * time, ensuring that integration has no effect on movement.
+         * the model's topleft most extreme will be around 0, 0. We will move
+         * the entire model backwards and anchor by one step along the way and
+         * integrate each  time, ensuring that integration has no effect
+         * on movement.
          *
-         * Because the model is automatically snapped back to its target position
-         * as soon as integration is complete, we'll need to do the same on two
-         * models and calculate how many integrations are required to get the model
-         * to settle. We'll apply n - 1 integrations to the second and then test it.
+         * Because the model is automatically snapped back to its target
+         * position as soon as integration is complete, we'll need to do the
+         * same on two models and calculate how many integrations are required
+         * to get the model to settle. We'll apply n - 1 integrations to the
+         * second and then test it.
          */
         wobbly::Vector const grabPoint (TextureWidth / 2, TextureHeight / 2);
-         
+
         wobbly::Model referenceModel (wobbly::Vector (0, 0),
                                       TextureWidth,
                                       TextureHeight);
@@ -1484,14 +1486,14 @@ namespace
         wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
         wobbly::Anchor referenceGrab (this->createAnchorFor (referenceModel,
                                                              grabPoint));
-        
+
         size_t const distance = 100;
         
         for (size_t i = 0; i < distance; ++i)
         {
             float const positive = 1;
             float const negative = static_cast <float> (positive) * -1.0;
-        
+
             grab->MoveBy (wobbly::Vector (positive, positive));
             this->model.MoveModelBy (wobbly::Vector (negative, negative));
             while (this->model.Step (1));
@@ -1502,13 +1504,14 @@ namespace
         }
         
         /* Complete steps on reference model, but track how long it takes */
-        size_t requiredStepsToSettle = 0;
+        int requiredStepsToSettle = 0;
         
         while (referenceModel.Step (1))
             ++requiredStepsToSettle;
-        
+
         /* Step test-against model for requiredStepsToSettle - 1 */
-        while (--requiredStepsToSettle)
+        requiredStepsToSettle = std::max (requiredStepsToSettle - 1, 0);
+        while (requiredStepsToSettle--)
             this->model.Step (1);
 
         /* Slightly higher range */
@@ -1551,7 +1554,8 @@ namespace
         {
             this->model.MoveModelTo (wobbly::Point (0, 0));
             wobbly::Vector const grabPoint (0, 0);
-            wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
+            wobbly::Anchor grab (this->createAnchorFor (this->model,
+                                                        grabPoint));
 
             grab->MoveBy (wobbly::Point (100, 100));
             this->model.MoveModelTo (wobbly::Point (0, 0));
@@ -1559,7 +1563,7 @@ namespace
             /* Wait until the model has completely settled */
             while (this->model.Step (1));
         }
-    
+
         EXPECT_THAT (this->model.Extremes ()[0],
                      WithinGeometry (PointBox (wobbly::Point (-1.5, -1.5),
                                                wobbly::Point (1.5, 1.5))));

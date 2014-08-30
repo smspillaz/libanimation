@@ -127,7 +127,6 @@ wobbly::Spring::CreateWithTrackingID (PointView <double>       &&forceA,
                                       Vector            const &distance)
 {
     size_t trackingID (NextSpringID ());
-    std::cout << "Created spring: " << trackingID << std::endl;
     Spring spring (std::move (forceA),
                    std::move (forceB),
                    std::move (posA),
@@ -307,7 +306,6 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
     std::fill_n (data.get (), 4, 0);
     wobbly::PointView <double> anchorView (data.get (), 0);
     bg::assign (anchorView, install);
-    //std::cout << "Install at: " << bg::get <0> (anchorView) << " " << bg::get <1> (anchorView) << std::endl;
 
     /* We always want the spring to *read* the first and second
      * positions, although the positions for the purpose of
@@ -334,17 +332,11 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
             bg::fixups::assign_point (delta, desiredPoint);
             bg::fixups::subtract_point (delta, anchorPoint);
 
-            using R = InstallResult::InsertedSpring;
-            
-            return R {
-                         mSprings.EmplaceAndTrack (std::move (anchorForce),
-                                                   std::move (meshForce),
-                                                   std::move (anchorPoint),
-                                                   std::move (meshPoint),
-                                                   delta),
-                         mInserted.EmplaceAndTrack (std::move (updatable))
-                     };
-                         
+            return mSprings.EmplaceAndTrack (std::move (anchorForce),
+                                             std::move (meshForce),
+                                             std::move (anchorPoint),
+                                             std::move (meshPoint),
+                                             delta);
         };
 
     /* Move out the split spring first */
@@ -361,11 +353,18 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
                                std::move (secondDesired),
                                std::move (secondForce)));
 
+    /* We allow AnchorDataVector to have a temporary reference to a view
+     * to our data for as long as our data lives so that we can move this
+     * bit of data when the entire model moves* */
+    auto trackedUpdatablePoint =
+        mInserted.EmplaceAndTrack (std::move (anchorView));
+
     return {
                std::move (stolen),
                std::move (first),
                std::move (second),
-               std::move (data)
+               std::move (data),
+               std::move (trackedUpdatablePoint)
            };
 }
 
@@ -599,17 +598,22 @@ namespace
     {
         public:
 
-            typedef wobbly::TemporaryOwner <wobbly::Spring> StolenSpring;
-            typedef SpringMesh::InstallResult::InsertedSpring TemporarySpring;
+            typedef wobbly::SpringMesh::AnchorDataVector ADV;
 
-            InsertedSprings (StolenSpring               &&stolen,
-                             TemporarySpring            &&first,
-                             TemporarySpring            &&second,
-                             std::unique_ptr <double[]> &&data) :
+            typedef wobbly::TemporaryOwner <wobbly::Spring> Stolen;
+            typedef wobbly::TemporaryOwner <wobbly::Spring::ID> Temporary;
+            typedef wobbly::TemporaryOwner <ADV::ID> Anchor;
+
+            InsertedSprings (Stolen                     &&stolen,
+                             Temporary                  &&first,
+                             Temporary                  &&second,
+                             std::unique_ptr <double[]> &&data,
+                             Anchor                     &&anchor) :
                 stolen (std::move (stolen)),
                 first (std::move (first)),
                 second (std::move (second)),
-                data (std::move (data))
+                data (std::move (data)),
+                anchor (std::move (anchor))
             {
             }
 
@@ -617,7 +621,8 @@ namespace
                 stolen (std::move (package.stolen)),
                 first (std::move (package.first)),
                 second (std::move (package.second)),
-                data (std::move (package.data))
+                data (std::move (package.data)),
+                anchor (std::move (package.anchor))
             {
             }
 
@@ -631,6 +636,7 @@ namespace
                 first = std::move (other.first);
                 second = std::move (other.second);
                 data = std::move (other.data);
+                anchor = std::move (other.anchor);
 
                 return *this;
             }
@@ -639,15 +645,6 @@ namespace
             {
                 wobbly::PointView <double> pv (data.get (), 0);
                 bg::add_point (pv, delta);
-                
-                std::cout << "Delta: " << bg::get <0> (delta) << " " << bg::get <1> (delta) << std::endl;
-                std::cout << "Data: " << std::endl;
-                
-                for (size_t i = 0; i < 4; ++i)
-                {
-                    std::cout << data.get ()[i] << " ";
-                }
-                std::cout << std::endl;
             }
 
         private:
@@ -655,10 +652,11 @@ namespace
             InsertedSprings (InsertedSprings const &) = delete;
             InsertedSprings & operator= (InsertedSprings const &) = delete;
 
-            StolenSpring stolen;
-            TemporarySpring first;
-            TemporarySpring second;
+            Stolen stolen;
+            Temporary first;
+            Temporary second;
             std::unique_ptr <double[]> data;
+            Anchor anchor;
     };
 
     wobbly::Anchor
@@ -742,7 +740,8 @@ namespace
                                                std::move (result.stolen),
                                                std::move (result.first),
                                                std::move (result.second),
-                                               std::move (result.data)));
+                                               std::move (result.data),
+                                               std::move (result.anchor)));
     }
 
     class GrabAnchor
@@ -818,8 +817,6 @@ wobbly::Model::InsertAnchor (Point const &position) throw (std::runtime_error)
 {
     auto &points = priv->mPositions.PointArray ();
 
-    //std::cout << "Grab anchor at: " << bg::get <0> (position) << " " << bg::get <1> (position) << std::endl;
-
     /* Bets are off once we've inserted an anchor, the model is now unequal */
     priv->mCurrentlyUnequal = true;
 
@@ -839,8 +836,6 @@ wobbly::Model::MoveModelBy (Point const &delta)
     auto &points (priv->mPositions.PointArray ());
     auto &estimated (priv->mTargets.PointArray ());
     
-    //std::cout << "Moving model by " << bg::get <0> (delta) << " " << bg::get <1> (delta) << std::endl;
-
     for (size_t i = 0; i < config::TotalIndices; ++i)
     {
         PointView <double> pointView (points, i);
@@ -1151,8 +1146,6 @@ wobbly::BezierMesh::Extremes () const
     {
         double const x = mPoints[i];
         double const y = mPoints[i + 1];
-        
-        std::cout << "Consider coord " << x << " " << y << std::endl;
 
         SetToExtreme (topLeft, x, min, y, min);
         SetToExtreme (topRight, x, max, y, min);
