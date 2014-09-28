@@ -5,9 +5,14 @@
 # See LICENCE.md for Copyright information.
 
 set (LIBWOBBLY_SOURCES
-	 ${CMAKE_CURRENT_SOURCE_DIR}/emscripten.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/wobbly.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/wobbly_internal.h)
+
+if (EMSCRIPTEN)
+
+    list (APPEND LIBWOBBLY_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/emscripten.cpp)
+
+endif (EMSCRIPTEN)
 
 polysquare_add_library (${LIBWOBBLY_LIBRARY} SHARED
                         SOURCES ${LIBWOBBLY_SOURCES}

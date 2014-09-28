@@ -7,6 +7,8 @@
 project (libwobbly)
 cmake_minimum_required (VERSION 2.8 FATAL_ERROR)
 
+option (EMSCRIPTEN "Use emscripten" OFF)
+
 # Set up CMAKE_MODULE_PATH to import Google Test and Google Mock
 set (LIBWOBBLY_CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set (LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH

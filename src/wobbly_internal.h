@@ -873,9 +873,9 @@ namespace wobbly
                     TemporaryOwner <Spring>
                     TakeMatching (Predicate const &comparator)
                     {
-                        auto it = std::remove_if (std::begin (mSprings),
-                                                  std::end (mSprings),
-                                                  comparator);
+                        auto it = std::find_if (std::begin (mSprings),
+                                                std::end (mSprings),
+                                                comparator);
 
                         if (it == mSprings.end ())
                             throw std::logic_error ("Couldn't find matching "
