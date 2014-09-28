@@ -182,7 +182,7 @@ namespace wobbly
             }
         }
 
-        size_t
+        inline size_t
         ClosestIndexToPosition (wobbly::MeshArray   &points,
                                 wobbly::Point const &pos)
         {

@@ -18,6 +18,8 @@
 #include <smspillaz/wobbly/wobbly.h>
 #include <wobbly_internal.h>
 
+#include <ostream_point_operator.h>
+
 using ::testing::_;
 using ::testing::AtLeast;
 using ::testing::Combine;
@@ -69,67 +71,8 @@ namespace boost
     }
 }
 
-namespace wobbly
-{
-    std::ostream &
-    operator<< (std::ostream &lhs, Point const &p)
-    {
-        return lhs << std::setprecision (10)
-                   << "x: "
-                   << bg::get <0> (p)
-                   << " y: "
-                   << bg::get <1> (p);
-    }
-
-    template <typename NumericType>
-    std::ostream &
-    operator<< (std::ostream &lhs, PointView <NumericType> const &p)
-    {
-        Point point;
-        bg::assign (point, p);
-        return lhs << point;
-    }
-}
-
 namespace
 {
-    class DoublePointView :
-        public Test,
-        public WithParamInterface <size_t>
-    {
-    public:
-
-        DoublePointView () :
-            pointOffset (GetParam ()),
-            arrayOffset (GetParam () * 2)
-        {
-            array.fill (0);
-        }
-
-        std::array <double, 4> array;
-        size_t                 pointOffset;
-        size_t                 arrayOffset;
-    };
-
-    TEST_P (DoublePointView, WriteXWithOffset)
-    {
-        wobbly::PointView <double> pv (array, pointOffset);
-        bg::set <0> (pv, 1);
-
-        EXPECT_EQ (array[arrayOffset], 1);
-    }
-
-    TEST_P (DoublePointView, WriteYWithOffset)
-    {
-        wobbly::PointView <double> pv (array, pointOffset);
-        bg::set <1> (pv, 1);
-
-        EXPECT_EQ (array[arrayOffset + 1], 1);
-    }
-
-    INSTANTIATE_TEST_CASE_P (DuplexMeshArray, DoublePointView,
-                             Values (0, 1));
-
     class SingleObjectStorage
     {
         public:
@@ -175,334 +118,7 @@ namespace
             wobbly::PointView <double> force;
     };
 
-    constexpr double FirstPositionX = 50.0f;
-    constexpr double FirstPositionY = 50.0f;
-
-    constexpr double SecondPositionX = 100.0f;
-    constexpr double SecondPositionY = 100.0f;
-
     constexpr double SpringConstant = 0.5f;
-
-    TEST (Spring, MoveConstructorNoExcept)
-    {
-        SingleObjectStorage storageA, storageB;
-
-        EXPECT_NO_THROW ({
-            wobbly::Spring a (storageA.Force (),
-                              storageB.Force (),
-                              storageA.Position (),
-                              storageB.Position (),
-                              wobbly::Vector (0, 0));
-            wobbly::Spring b (std::move (a));
-        });
-    }
-
-    TEST (Spring, MoveAssignToSelf)
-    {
-        SingleObjectStorage storageA, storageB;
-
-        EXPECT_EXIT ({
-            wobbly::Spring a (storageA.Force (),
-                              storageB.Force (),
-                              storageA.Position (),
-                              storageB.Position (),
-                              wobbly::Vector (0, 0));
-
-            a = std::move (a);
-            exit (0);
-        }, ExitedWithCode (0), "");
-    }
-
-    class Springs :
-        public ::testing::Test
-    {
-        public:
-
-            Springs ():
-                desiredDistance (SecondPositionX - FirstPositionX,
-                                 SecondPositionY - FirstPositionY),
-                first (firstStorage),
-                second (secondStorage),
-                spring (firstStorage.Force (),
-                        secondStorage.Force (),
-                        firstStorage.Position (),
-                        secondStorage.Position (),
-                        desiredDistance)
-            {
-                bg::assign_point (first.position,
-                                  wobbly::Point (FirstPositionX,
-                                                 FirstPositionY));
-                bg::assign_point (second.position,
-                                  wobbly::Point (SecondPositionX,
-                                                 SecondPositionY));
-            }
-
-        protected:
-
-            wobbly::Vector desiredDistance;
-
-        private:
-
-            SingleObjectStorage firstStorage;
-            SingleObjectStorage secondStorage;
-
-        protected:
-
-            SingleObjectStorageView first;
-            SingleObjectStorageView second;
-            wobbly::Spring spring;
-    };
-
-    TEST_F (Springs, NoForceAppliedWhenNoDeltaFromDesired)
-    {
-        spring.ApplyForces (SpringConstant);
-
-        EXPECT_THAT (first.force,
-                     Eq (wobbly::Vector (0, 0)));
-        EXPECT_THAT (second.force,
-                     Eq (wobbly::Vector (0, 0)));
-    }
-
-    template <typename Position>
-    wobbly::Vector
-    ForceForSpring (Position      const &first,
-                    Position      const &second,
-                    wobbly::Vector const &desired)
-    {
-        wobbly::Vector expectedForce;
-        bg::assign (expectedForce, second);
-        bg::subtract_point (expectedForce, first);
-        bg::subtract_point (expectedForce, desired);
-        bg::multiply_value (expectedForce, SpringConstant);
-        bg::divide_value (expectedForce, 2);
-
-        return expectedForce;
-    }
-
-    TEST_F (Springs, ForceAppliedToFirstObjectProportianalToPositiveDistanceSK)
-    {
-        bg::assign (first.position,
-                    wobbly::Vector (FirstPositionX - 10.0f,
-                                    FirstPositionY - 10.0f));
-        wobbly::Vector expectedForce (ForceForSpring (first.position,
-                                                      second.position,
-                                                      desiredDistance));
-
-        spring.ApplyForces (SpringConstant);
-
-        EXPECT_THAT (first.force, Eq (expectedForce));
-    }
-
-    TEST_F (Springs, ForceAppliedToSecondObjectProportionalToNegativeDistanceSK)
-    {
-        bg::assign (first.position, wobbly::Vector (FirstPositionX - 10.0f,
-                                                    FirstPositionY - 10.0f));
-        wobbly::Vector negativeDistance (desiredDistance);
-        bg::multiply_value (negativeDistance, -1.0f);
-
-        wobbly::Vector expectedForce (ForceForSpring (second.position,
-                                                      first.position,
-                                                      negativeDistance));
-
-        spring.ApplyForces (SpringConstant);
-
-        EXPECT_THAT (second.force, Eq (expectedForce));
-    }
-
-    TEST_F (Springs, ForceAccumulatesWithApplications)
-    {
-        bg::assign (first.position,
-                    wobbly::Vector (FirstPositionX - 10.0f,
-                                    FirstPositionY - 10.0f));
-        wobbly::Vector expectedForce (ForceForSpring (first.position,
-                                                      second.position,
-                                                      desiredDistance));
-
-        /* Scalar for single spring */
-        unsigned int const nApplications = 3;
-        bg::multiply_value (expectedForce, nApplications);
-
-        for (unsigned int i = 0; i < nApplications; ++i)
-            spring.ApplyForces (SpringConstant);
-
-        EXPECT_THAT (first.force, Eq (expectedForce));
-    }
-
-    TEST_F (Springs, ForceRelationshipIsLinearlyRelatedToDistance)
-    {
-        std::function <double (int)> forceByDistanceFunction =
-            [this](int delta) -> double {
-                bg::assign (first.force, wobbly::Vector (0, 0));
-                bg::assign (second.force, wobbly::Vector (0, 0));
-                bg::assign (first.position,
-                            wobbly::Vector (FirstPositionX - delta,
-                                            FirstPositionY));
-                bg::assign (second.position,
-                            wobbly::Vector (SecondPositionX + delta,
-                                            SecondPositionY));
-
-                spring.ApplyForces (SpringConstant);
-
-                return bg::get <0> (first.force);
-            };
-
-        EXPECT_THAT (forceByDistanceFunction,
-                     SatisfiesModel (Linear <double> ()));
-    }
-
-    TEST_F (Springs, ForceClippedWithVerySmallDelta)
-    {
-        double const justBelowThreshold = FirstPositionX -
-                                          wobbly::Spring::ClipThreshold * 1.1;
-
-        bg::assign (first.position,
-                    wobbly::Vector (justBelowThreshold, FirstPositionY));
-        spring.ApplyForces (SpringConstant);
-
-        EXPECT_THAT (first.force, Eq (wobbly::Vector (0, 0)));
-    }
-
-    TEST_F (Springs, ApplyForcesReturnsTrueIfForceRemaining)
-    {
-        /* Change the position of one object, that will cause forces
-         * to be exerted
-         */
-        bg::assign (first.position, wobbly::Vector (FirstPositionX - 10,
-                                                    FirstPositionY));
-
-        EXPECT_TRUE (spring.ApplyForces (SpringConstant));
-    }
-
-    TEST_F (Springs, ApplyForcesReturnsFalseIfNoForceRemaining)
-    {
-        /* Where there is no delta, there is no force */
-        EXPECT_FALSE (spring.ApplyForces (0.0f));
-    }
-
-    double const SpringScaleFactor = 2.0f;
-
-    TEST_F (Springs, ForceExistsAfterLengthScaled)
-    {
-        spring.ScaleLength (wobbly::Vector (SpringScaleFactor,
-                                            SpringScaleFactor));
-        EXPECT_TRUE (spring.ApplyForces (SpringConstant));
-    }
-
-    TEST_F (Springs, NoForceAfterLengthScaledAndObjectsMoved)
-    {
-        /* Calculate distance between first and second, then adjust
-         * second object's position to be distance * scaleFactor */
-        wobbly::Vector distance;
-        bg::assign (distance, second.position);
-        bg::subtract_point (distance, first.position);
-        bg::subtract_point (second.position, distance);
-        bg::multiply_value (distance, SpringScaleFactor);
-        bg::add_point (second.position, distance);
-
-        spring.ScaleLength (wobbly::Vector (SpringScaleFactor,
-                                            SpringScaleFactor));
-        EXPECT_FALSE (spring.ApplyForces (SpringConstant));
-    }
-
-    class TrackedAnchors :
-        public Test
-    {
-        public:
-
-            wobbly::TrackedAnchors <3> anchors;
-    };
-
-    class MockAnchorAction
-    {
-        public:
-
-            MockAnchorAction ()
-            {
-                EXPECT_CALL (*this, Action (_)).Times (AtLeast (0));
-            }
-
-            MOCK_METHOD1 (Action, void (size_t));
-    };
-
-    TEST_F (TrackedAnchors, WithFirstGrabbedDisabledWithNoAnchorsLocked)
-    {
-        using namespace std::placeholders;
-
-        MockAnchorAction action;
-        EXPECT_CALL (action, Action (_)).Times (0);
-
-        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
-                                             &action, _1));
-    }
-
-    TEST_F (TrackedAnchors, LockingAnchorEnablesWithFirstGrabbed)
-    {
-        using namespace std::placeholders;
-
-        size_t lockIndex = 1;
-
-        anchors.Lock (lockIndex);
-
-        MockAnchorAction action;
-        EXPECT_CALL (action, Action (lockIndex)).Times (1);
-
-        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
-                                             &action, _1));
-    }
-
-    TEST_F (TrackedAnchors, FirstGrabbedTakesPriorityAsMoreLocked)
-    {
-        using namespace std::placeholders;
-
-        size_t lockIndex = 1;
-
-        anchors.Lock (lockIndex);
-        anchors.Lock (lockIndex + 1);
-
-        MockAnchorAction action;
-        EXPECT_CALL (action, Action (lockIndex)).Times (1);
-
-        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
-                                             &action, _1));
-    }
-
-    TEST_F (TrackedAnchors, MoveToNextHeavisestWhereFirstGrabbedUnlocked)
-    {
-        using namespace std::placeholders;
-
-        anchors.Lock (0);
-
-        for (size_t i = 0; i < 2; ++i)
-            anchors.Lock (1);
-
-        for (size_t i = 0; i < 3; ++i)
-            anchors.Lock (2);
-
-        anchors.Unlock (0);
-
-        MockAnchorAction action;
-        EXPECT_CALL (action, Action (2)).Times (1);
-
-        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
-                                             &action, _1));
-    }
-
-    TEST_F (TrackedAnchors, UnsetWhenAllUnlocked)
-    {
-        using namespace std::placeholders;
-
-        for (size_t i = 0; i < 3; ++i)
-            anchors.Lock (i);
-
-        for (size_t i = 0; i < 3; ++i)
-            anchors.Unlock (i);
-
-        MockAnchorAction action;
-        EXPECT_CALL (action, Action (_)).Times (0);
-
-        anchors.WithFirstGrabbed (std::bind (&MockAnchorAction::Action,
-                                             &action, _1));
-    }
 
     double TileWidth (double width)
     {
@@ -1174,7 +790,7 @@ namespace
     {
         auto anchor (model.GrabAnchor (wobbly::Point (TextureWidth / 2, 0)));
 
-        anchor->MoveBy (wobbly::Vector (1, 1));
+        anchor.MoveBy (wobbly::Vector (1, 1));
         auto point (GetTruncatedDeformedCenter (model));
 
         EXPECT_THAT (point,
@@ -1205,7 +821,7 @@ namespace
     TEST_P (SpringBezierModelGrabPositions, GrabsCorrectIndex)
     {
         wobbly::Anchor grab (model.GrabAnchor (grabPosition));
-        grab->MoveBy (movement);
+        grab.MoveBy (movement);
 
         wobbly::Point transformed (grabPosition);
         bg::add_point (transformed, movement);
@@ -1223,7 +839,7 @@ namespace
          * While exact positioning isn't possible without anchors grabbed,
          * it is almost always desired in this case */
         wobbly::Anchor grab (model.GrabAnchor (grabPosition));
-        grab->MoveBy (wobbly::Vector (100, 100));
+        grab.MoveBy (wobbly::Vector (100, 100));
 
         /* Wait for model to settle */
         while (model.Step (1));
@@ -1494,11 +1110,11 @@ namespace
             float const positive = 1;
             float const negative = static_cast <float> (positive) * -1.0;
 
-            grab->MoveBy (wobbly::Vector (positive, positive));
+            grab.MoveBy (wobbly::Vector (positive, positive));
             this->model.MoveModelBy (wobbly::Vector (negative, negative));
             while (this->model.Step (1));
             
-            referenceGrab->MoveBy (wobbly::Vector (positive, positive));
+            referenceGrab.MoveBy (wobbly::Vector (positive, positive));
             referenceModel.MoveModelBy (wobbly::Vector (negative, negative));
             while (referenceModel.Step (1));
         }
@@ -1533,7 +1149,7 @@ namespace
         wobbly::Vector const grabPoint (0, 0);
         wobbly::Anchor grab (this->createAnchorFor (this->model, grabPoint));
 
-        grab->MoveBy (wobbly::Point (100, 100));
+        grab.MoveBy (wobbly::Point (100, 100));
         this->model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
@@ -1557,7 +1173,7 @@ namespace
             wobbly::Anchor grab (this->createAnchorFor (this->model,
                                                         grabPoint));
 
-            grab->MoveBy (wobbly::Point (100, 100));
+            grab.MoveBy (wobbly::Point (100, 100));
             this->model.MoveModelTo (wobbly::Point (0, 0));
 
             /* Wait until the model has completely settled */
@@ -1589,7 +1205,7 @@ namespace
         wobbly::Anchor grab (this->createAnchorFor (this->model,
                                                     grabPoint));
 
-        grab->MoveBy (wobbly::Point (100, 100));
+        grab.MoveBy (wobbly::Point (100, 100));
         this->model.MoveModelTo (wobbly::Point (0, 0));
 
         /* Wait until the model has completely settled */
@@ -1610,7 +1226,7 @@ namespace
             wobbly::Anchor grab (this->createAnchorFor (this->model,
                                                         grabPoint));
 
-            grab->MoveBy (wobbly::Point (100, 100));
+            grab.MoveBy (wobbly::Point (100, 100));
             this->model.Step (2);
         }
 
@@ -1642,8 +1258,8 @@ namespace
 
         wobbly::Vector const firstMovement (-100, 0);
 
-        firstForOneAnchorModel->MoveBy (firstMovement);
-        firstForTwoAnchorModel->MoveBy (firstMovement);
+        firstForOneAnchorModel.MoveBy (firstMovement);
+        firstForTwoAnchorModel.MoveBy (firstMovement);
 
         /* Keep integrating both models until one of them is settled. The
          * result should be that the first model finishes while the second
@@ -1669,7 +1285,7 @@ namespace
         wobbly::Anchor grab (this->createAnchorFor (this->model,
                                                     grabPoint));
 
-        grab->MoveBy (wobbly::Point (100, 100));
+        grab.MoveBy (wobbly::Point (100, 100));
         EXPECT_TRUE (this->model.Step (0));
     }
 
@@ -1681,7 +1297,7 @@ namespace
             wobbly::Anchor grab (this->createAnchorFor (this->model,
                                                         grabPoint));
 
-            grab->MoveBy (wobbly::Point (100, 100));
+            grab.MoveBy (wobbly::Point (100, 100));
 
             /* Step the model once, this will make the model unequal */
             this->model.Step (1);
@@ -1697,7 +1313,7 @@ namespace
         wobbly::Vector const grabPoint (model.Extremes ()[3]);
         wobbly::Anchor anchor (model.GrabAnchor (grabPoint));
 
-        anchor->MoveBy (wobbly::Point (100, 100));
+        anchor.MoveBy (wobbly::Point (100, 100));
 
         /* Twenty steps is reasonable */
         for (int i = 0; i < 20; ++i)
@@ -1757,125 +1373,6 @@ namespace
 
         EXPECT_GT (bg::get <0> (lowerFrictionModel.Extremes ()[0]),
                    bg::get <0> (higherFrictionModel.Extremes ()[0]));
-    }
-
-    class EulerIntegration :
-        public Test
-    {
-        public:
-
-            EulerIntegration () :
-                view (storage)
-            {
-            }
-
-            typedef wobbly::PointView <double const> DCPV;
-
-            SingleObjectStorage storage;
-            SingleObjectStorageView view;
-    };
-
-    TEST_F (EulerIntegration, ContinueStepWhenObjectsHaveVelocity)
-    {
-        bg::set <0> (view.velocity, 1.0);
-
-        /* Integrate without any friction */
-        EXPECT_TRUE (wobbly::EulerIntegrate (1,
-                                             0,
-                                             1,
-                                             std::move (view.position),
-                                             std::move (view.velocity),
-                                             DCPV (view.force)));
-    }
-
-    TEST_F (EulerIntegration, NoFurtherStepWhenObjectsHaveNoVelocity)
-    {
-        bg::set <0> (view.velocity, 0.0);
-
-        /* Integrate without any friction */
-        EXPECT_FALSE (wobbly::EulerIntegrate (1,
-                                              0,
-                                              1,
-                                              std::move (view.position),
-                                              std::move (view.velocity),
-                                              DCPV (view.force)));
-    }
-
-    TEST_F (EulerIntegration, VelocityIsParabolicWithFriction)
-    {
-        std::function <double (int)> horizontalVelocityFunction =
-            [this](int timestep) -> double {
-                bg::assign_point (view.position, wobbly::Point (1, 1));
-                bg::assign_point (view.velocity, wobbly::Point (1, 0));
-
-                wobbly::EulerIntegrate (timestep,
-                                        1,
-                                        1,
-                                        std::move (view.position),
-                                        std::move (view.velocity),
-                                        DCPV (view.force));
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (horizontalVelocityFunction,
-                     SatisfiesModel (Parabolic <double> ()));
-    }
-
-    TEST_F (EulerIntegration, VelocityIncreasesLinearlyWithConstantForce)
-    {
-        std::function <double (int)> frictionlessHorizontalVelocityFunction =
-            [this](int timestep) -> double {
-                /* Reset velocity and force */
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
-
-                wobbly::EulerIntegrate (timestep,
-                                        0,
-                                        1,
-                                        std::move (view.position),
-                                        std::move (view.velocity),
-                                        DCPV (view.force));
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (frictionlessHorizontalVelocityFunction,
-                     SatisfiesModel (Linear <double> ()));
-    }
-
-    TEST_F (EulerIntegration, LinearDecreaseInVelocityWithFriction)
-    {
-        unsigned int nSamples = 10;
-        int          range = std::pow (2, nSamples);
-
-        std::function <double (int)> frictionToVelocityFunction =
-            [this, range](int frictionAmount) -> double {
-                /* Reset velocity and force */
-                bg::assign (view.position, wobbly::Point (0, 0));
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
-
-                double frictionProportion =
-                    frictionAmount / static_cast <double> (range);
-
-                /* Step once, but with different frictions, linearly
-                 * interpolate between frictionAmount and nSamples
-                 * and scale by the default friction value to get
-                 * our samples */
-                wobbly::EulerIntegrate (16,
-                                        frictionProportion,
-                                        1.0,
-                                        std::move (view.position),
-                                        std::move (view.velocity),
-                                        DCPV (view.force));
-
-                return bg::get <0> (view.velocity);
-            };
-
-        EXPECT_THAT (frictionToVelocityFunction,
-                     SatisfiesModel (Linear <double> (),
-                                     WithSamples (nSamples)));
     }
 
     struct MockIntegration
@@ -2072,409 +1569,4 @@ namespace
 
         EXPECT_TRUE (stepper (positions, anchors));
     }
-
-    void
-    InitializePositionsWithDimensions (wobbly::MeshArray &positions,
-                                       double            width,
-                                       double            height)
-    {
-        double const meshWidth = wobbly::config::Width;
-        double const meshHeight = wobbly::config::Height;
-        double const tileWidth = TileWidth (width);
-        double const tileHeight = TileHeight (height);
-
-        for (unsigned int i = 0; i < meshHeight; ++i)
-        {
-            for (unsigned int j = 0; j < meshWidth; ++j)
-            {
-                wobbly::PointView <double> pv (positions,
-                                               i * meshWidth + j);
-                bg::assign_point (pv, wobbly::Point (tileWidth * j,
-                                                     tileHeight * i));
-            }
-        }
-    }
-
-    class ConstrainmentStep :
-        public Test
-    {
-        public:
-
-            ConstrainmentStep () :
-                range (10),
-                width (TextureWidth),
-                height (TextureHeight),
-                targets ([this](wobbly::MeshArray &mesh){
-                    InitializePositionsWithDimensions (mesh,
-                                                       TextureWidth,
-                                                       TextureHeight);
-                }),
-                constrainment (range, targets)
-            {
-                InitializePositionsWithDimensions (positions,
-                                                   TextureWidth,
-                                                   TextureHeight);
-            }
-
-            double                    range;
-            double                    width;
-            double                    height;
-
-            wobbly::TargetMesh targets;
-            wobbly::MeshArray positions;
-            wobbly::AnchorArray anchors;
-
-            wobbly::ConstrainmentStep constrainment;
-    };
-
-    TEST_F (ConstrainmentStep, PointsNotAffectedWhereNoAnchorGrabbed)
-    {
-        /* Make a separate copy of the array and test against it later */
-        wobbly::MeshArray expectedPositions;
-
-        InitializePositionsWithDimensions (expectedPositions,
-                                           TextureWidth,
-                                           TextureHeight);
-
-        constrainment (positions, anchors);
-
-        EXPECT_EQ (expectedPositions, positions);
-    }
-
-    TEST_F (ConstrainmentStep, ReturnsTrueWhereConstrainmentTookPlace)
-    {
-        auto handleOwner (targets.Activate ());
-        wobbly::PointView <double> pv (positions, 1);
-        bg::add_point (pv, wobbly::Point (range * 2, range * 2));
-
-        EXPECT_TRUE (constrainment (positions, anchors));
-    }
-
-    TEST_F (ConstrainmentStep, ReturnsFalseWhereNoConstrainmentTookPlace)
-    {
-        auto handleOwner (targets.Activate ());
-        wobbly::PointView <double> pv (positions, 1);
-
-        /* Not enough to cause constrainment */
-        bg::add_point (pv, wobbly::Point (range / 2, 0));
-
-        EXPECT_FALSE (constrainment (positions, anchors));
-    }
-
-    TEST_F (ConstrainmentStep, ConstrainedToPointsOnTargetMesh)
-    {
-        wobbly::Point const movement (range * 2, 0);
-        auto handleOwner (targets.Activate ());
-        wobbly::MoveOnly <wobbly::TargetMesh::Move> &handleWrap (handleOwner);
-        wobbly::TargetMesh::Move const &moveBy (handleWrap);
-
-        moveBy (movement);
-
-        /* Move the anchored point right by range * 2, the result should
-         * be that every other point is p.x + range */
-        constrainment (positions, anchors);
-
-        wobbly::MeshArray expectedPositions;
-
-        InitializePositionsWithDimensions (expectedPositions,
-                                           TextureWidth,
-                                           TextureHeight);
-
-        /* Add range.x to each point */
-        for (size_t i = 0; i < positions.size () / 2; ++i)
-        {
-            wobbly::PointView <double> pv (expectedPositions, i);
-            bg::add_point (pv, wobbly::Point (range, 0));
-        }
-
-        std::vector <Matcher <double>> matchers;
-        for (double expected : expectedPositions)
-            matchers.push_back (::testing::DoubleEq (expected));
-
-        EXPECT_THAT (positions, ElementsAreArray (&matchers[0],
-                                                  matchers.size ()));
-    }
-
-    typedef std::tuple <size_t, double> ConstrainmentStepPositionsParam;
-
-    class ConstrainmentStepPositions :
-        public ConstrainmentStep,
-        public WithParamInterface <ConstrainmentStepPositionsParam>
-    {
-        public:
-
-            ConstrainmentStepPositions () :
-                handle (targets.Activate ()),
-                index (std::get <0> (GetParam ())),
-                ratio (std::get <1> (GetParam ()))
-            {
-                anchors.Lock ((wobbly::config::Width *
-                               wobbly::config::Height) / 2);
-            }
-
-            wobbly::TargetMesh::Hnd handle;
-            size_t index;
-            double ratio;
-    };
-
-    TEST_P (ConstrainmentStepPositions, NotAffectedWhereWithinRadiusOfRange)
-    {
-        double const absratio = std::fabs (ratio);
-
-        /* Prevent zero-division. Treat zero as positive */
-        double const sign = ratio / (absratio + (absratio == 0.0));
-        double const radiusInRange = range - (range / 2);
-
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
-
-        bg::add_point (pv,
-                       wobbly::Point (radiusInRange * ratio,
-                                      radiusInRange * (1 - absratio) * sign));
-
-        /* Expected point is the modified point here, before constrainment */
-        bg::assign (expected, pv);
-
-        constrainment (positions, anchors);
-
-        EXPECT_THAT (pv, Eq (expected));
-    }
-
-    TEST_P (ConstrainmentStepPositions, AffectedWhereOutsideRadiusOfRange)
-    {
-        double absratio = std::fabs (ratio);
-
-        /* Prevent zero-division. Treat zero as positive */
-        double const sign = ratio / (absratio + (absratio == 0.0));
-        double const radiusOutOfRange = range * range;
-
-        wobbly::Point outOfRange (radiusOutOfRange * ratio,
-                                  radiusOutOfRange * (1 - absratio) * sign);
-        wobbly::Point inRange (range * ratio,
-                               range * (1 - absratio) * sign);
-
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
-
-        /* Expected point is the actual grid point, but at its maximum range */
-        bg::assign (expected, pv);
-        bg::add_point (expected, inRange);
-
-        bg::add_point (pv, outOfRange);
-        constrainment (positions, anchors);
-
-        EXPECT_THAT (pv, Eq (expected));
-    }
-
-    ConstrainmentStepPositionsParam const constrainmentStepParams[] =
-    {
-        ConstrainmentStepPositionsParam (0, -1.0),
-        ConstrainmentStepPositionsParam (wobbly::config::Width - 1, 1.0),
-        ConstrainmentStepPositionsParam ((wobbly::config::Height - 1) *
-                                         wobbly::config::Width, 0.0),
-        ConstrainmentStepPositionsParam (wobbly::config::Width *
-                                         wobbly::config::Height - 1, 0.0)
-    };
-
-    INSTANTIATE_TEST_CASE_P (Extremes, ConstrainmentStepPositions,
-                             ValuesIn (constrainmentStepParams));
-
-    class BezierMesh :
-        public Test
-    {
-        public:
-
-            wobbly::BezierMesh mesh;
-
-        protected:
-
-            typedef wobbly::Point Point;
-
-            typedef std::function <void (wobbly::PointView <double> &,
-                                         size_t,
-                                         size_t)> MeshTransform;
-            typedef std::function <double (Point const &)> ResultFactory;
-
-            virtual void SetUp ();
-            void ApplyTransformation (MeshTransform const &);
-
-            std::function <double (int)>
-            UnitDeformationFunction (ResultFactory const      &resultFactory,
-                                     wobbly::BezierMesh const &mesh,
-                                     unsigned int             nSamples);
-    };
-
-    void
-    BezierMesh::SetUp ()
-    {
-        InitializePositionsWithDimensions (mesh.PointArray (),
-                                           TextureWidth,
-                                           TextureHeight);
-    }
-
-    void
-    BezierMesh::ApplyTransformation (MeshTransform const &transform)
-    {
-        for (size_t i = 0; i < wobbly::config::Height; ++i)
-        {
-            for (size_t j = 0; j < wobbly::config::Width; ++j)
-            {
-                auto pv (mesh.PointForIndex (j, i));
-                transform (pv, j, i);
-            }
-        }
-    }
-
-    std::function <double (int)>
-    BezierMesh::UnitDeformationFunction (ResultFactory const      &result,
-                                         wobbly::BezierMesh const &mesh,
-                                         unsigned int             nSamples)
-    {
-        auto deformation =
-            [nSamples, &mesh, result](int lookupValue) -> double {
-                /* Divide by the total number of samples (2^10) in order to get
-                 * the unit value. */
-
-                double const unitLookupValue =
-                    lookupValue / static_cast <double> (pow (2, nSamples));
-                auto const lookup (wobbly::Point (unitLookupValue,
-                                                  unitLookupValue));
-                auto p (mesh.DeformUnitCoordsToMeshSpace (lookup));
-
-                return result (p);
-            };
-
-        return deformation;
-    }
-
-    TEST_F (BezierMesh, LinearHorizontalDeformationForUniformScale)
-    {
-        using namespace std::placeholders;
-
-        ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            bg::multiply_value (pv, 2);
-        }, _1));
-
-        unsigned int const nSamples = 10;
-        std::function <double (int)> horizontalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return bg::get <0> (p);
-                                     },
-                                     mesh,
-                                     nSamples);
-
-        EXPECT_THAT (horizontalDeformation,
-                     SatisfiesModel (Linear <double> (),
-                                     WithSamples (nSamples),
-                                     WithTolerance (10e-5)));
-    }
-
-    TEST_F (BezierMesh, LinearVerticalDeformationForUniformScale)
-    {
-        using namespace std::placeholders;
-
-        ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            bg::multiply_value (pv, 2);
-        }, _1));
-
-        unsigned int const nSamples = 10;
-        std::function <double (int)> verticalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return bg::get <1> (p);
-                                     },
-                                     mesh,
-                                     nSamples);
-
-        EXPECT_THAT (verticalDeformation,
-                     SatisfiesModel (Linear <double> (),
-                                     WithSamples (nSamples),
-                                     WithTolerance (10e-5)));
-    }
-
-    /* Its somewhat difficult to test the non-linear case, considering
-     * that the bezier patch evaluation is actually an interpolation
-     * between four different parabolic functions. For now just check
-     * if the deformation was non-linear */
-    TEST_F (BezierMesh, NonLinearHorizontalDeformationForNonUniformScale)
-    {
-        using namespace std::placeholders;
-
-        typedef wobbly::PointView <double> DoublePointView;
-
-        ApplyTransformation ([](DoublePointView &pv, size_t x, size_t y) {
-             bg::multiply_point (pv, wobbly::Point (x, y));
-        });
-
-        unsigned int const nSamples = 10;
-        std::function <double (int)> horizontalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                         return bg::get <0> (p);
-                                     },
-                                     mesh,
-                                     nSamples);
-
-        EXPECT_THAT (horizontalDeformation,
-                     Not (SatisfiesModel (Linear <double> (),
-                                          WithSamples (nSamples),
-                                          WithTolerance (10e-5))));
-    }
-
-    TEST_F (BezierMesh, ExtremesAreTextureEdges)
-    {
-        std::array <wobbly::Point, 4> const extremes = mesh.Extremes ();
-        Matcher <wobbly::Point const &> const textureEdges[] =
-        {
-            Eq (wobbly::Point (0, 0)),
-            Eq (wobbly::Point (TextureWidth, 0)),
-            Eq (wobbly::Point (0, TextureHeight)),
-            Eq (wobbly::Point (TextureWidth, TextureHeight))
-        };
-
-        EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
-    }
-
-    class BezierMeshPoints :
-        public BezierMesh,
-        public WithParamInterface <wobbly::Point>
-    {
-    };
-
-    wobbly::Point TexturePrediction (wobbly::Point const &unit)
-    {
-        wobbly::Point textureRelative (bg::get <1> (unit),
-                                       bg::get <0> (unit));
-        bg::multiply_point (textureRelative,
-                            wobbly::Point (TextureWidth, TextureHeight));
-        PointCeiling (textureRelative);
-        return textureRelative;
-    }
-
-    wobbly::Point MeshInterpolation (wobbly::BezierMesh const &mesh,
-                                     wobbly::Point const &unit)
-    {
-        wobbly::Point meshRelative (mesh.DeformUnitCoordsToMeshSpace (unit));
-        PointCeiling (meshRelative);
-        return meshRelative;
-    }
-
-    TEST_P (BezierMeshPoints, LinearDefinitionForNoTransformation)
-    {
-        auto point (GetParam ());
-        auto prediction (TexturePrediction (point));
-        auto interpolated (MeshInterpolation (mesh, point));
-
-        EXPECT_THAT (interpolated, Eq (prediction));
-    }
-
-    wobbly::Point const unitMeshExtremes[] =
-    {
-        wobbly::Point (0.0, 0.0),
-        wobbly::Point (0.0, 1.0),
-        wobbly::Point (1.0, 0.0),
-        wobbly::Point (1.0, 1.0)
-    };
-
-    INSTANTIATE_TEST_CASE_P (UnitExtremes,
-                             BezierMeshPoints,
-                             ValuesIn (unitMeshExtremes));
 }
