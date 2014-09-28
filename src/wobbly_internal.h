@@ -678,11 +678,11 @@ namespace wobbly
              {
              }
              
-             ~ConstrainingAnchor () noexcept (true)
+             ~ConstrainingAnchor () noexcept (true) override
              {
              };
 
-             void MoveBy (Point const &delta) noexcept (true)
+             void MoveBy (Point const &delta) noexcept (true) override
              {
                  /* We have to unwrap handle a little bit */
                  MoveOnly <TargetMesh::Move> &hnd (handle);

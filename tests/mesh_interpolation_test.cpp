@@ -126,7 +126,7 @@ namespace
                                          size_t)> MeshTransform;
             typedef std::function <double (Point const &)> ResultFactory;
 
-            virtual void SetUp ();
+            void SetUp () override;
             void ApplyTransformation (MeshTransform const &);
 
             std::function <double (int)>

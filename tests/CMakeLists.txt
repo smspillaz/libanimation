@@ -26,4 +26,9 @@ polysquare_add_test (${LIBWOBBLY_UNIT_TESTS_BINARY}
                      EXTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXTERNAL_INCLUDE_DIRS}
                      SOURCES ${LIBWOBBLY_UNIT_TESTS_SOURCES}
                      LIBRARIES ${LIBWOBBLY_UNIT_TESTS_LIBRARIES}
-                     MATCHERS ${LIBWOBBLY_MATCHERS_LIBRARY})
+                     MATCHERS ${LIBWOBBLY_MATCHERS_LIBRARY}
+                     CLANG_TIDY_DISABLE_CHECKS
+                     # clang-tidy trips over usage of GetParam () in TEST_P
+                     clang-analyzer-core.uninitialized.UndefReturn
+                     # clang-tidy trips over linked_ptr usage in gmock
+                     clang-analyzer-cplusplus.NewDelete)

@@ -18,7 +18,11 @@ polysquare_add_library (${LIBWOBBLY_LIBRARY} SHARED
                         SOURCES ${LIBWOBBLY_SOURCES}
                         INTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXPORTED_INCLUDE_DIRS}
                         EXTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXTERNAL_INCLUDE_DIRS}
-                        LIBRARIES ${LIBWOBBLY_EXTERNAL_LIBRARIES})
+                        LIBRARIES ${LIBWOBBLY_EXTERNAL_LIBRARIES}
+                        CLANG_TIDY_DISABLE_CHECKS
+                        # Disable unused-local-typedef as it trips up on
+                        # BOOST_CONCEPT_ASSERT
+                        clang-diagnostic-unused-local-typedef)
 
 install (TARGETS ${LIBWOBBLY_LIBRARY}
          LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
