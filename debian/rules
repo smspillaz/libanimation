@@ -16,7 +16,7 @@ CXXFLAGS += -Wno-error=maybe-uninitialized
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/cmake.mk
 
-DEB_CMAKE_NORMAL_ARGS += -DPOLYSQUARE_USE_VERAPP=OFF -DPOLYSQUARE_USE_CPPCHECK=OFF
+DEB_CMAKE_NORMAL_ARGS += -DPOLYSQUARE_USE_VERAPP=OFF -DPOLYSQUARE_USE_CPPCHECK=OFF -DPOLYSQUARE_USE_CLANG_TIDY=OFF
 
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE

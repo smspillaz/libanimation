@@ -272,7 +272,8 @@ namespace
 
 wobbly::SpringMesh::SpringMesh (MeshArray    &points,
                                 Vector const &springDimensions) :
-    mSprings (GenerateBaseSpringMesh (points, mForces, springDimensions))
+    mSprings (GenerateBaseSpringMesh (points, mForces, springDimensions)),
+    mInserted ()
 {
 }
 

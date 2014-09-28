@@ -31,4 +31,6 @@ polysquare_add_test (${LIBWOBBLY_UNIT_TESTS_BINARY}
                      # clang-tidy trips over usage of GetParam () in TEST_P
                      clang-analyzer-core.uninitialized.UndefReturn
                      # clang-tidy trips over linked_ptr usage in gmock
-                     clang-analyzer-cplusplus.NewDelete)
+                     clang-analyzer-cplusplus.NewDelete
+                     # clang-tidy trips over typedef use in gtest
+                     clang-diagnostic-unused-local-typedef)

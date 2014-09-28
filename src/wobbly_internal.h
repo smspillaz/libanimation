@@ -953,11 +953,15 @@ namespace wobbly
                     std::vector <Spring::ID> mPending;
             };
             
+
             struct AnchorDataVector
             {
                 public:
-                
-                    AnchorDataVector () = default;
+
+                    AnchorDataVector () :
+                        mNextIndex (0)
+                    {
+                    }
 
                     typedef ObjectIdentifier ID;
                     
