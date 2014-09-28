@@ -5,6 +5,7 @@
 # See LICENCE.md for Copyright information.
 
 set (LIBWOBBLY_SOURCES
+	 ${CMAKE_CURRENT_SOURCE_DIR}/emscripten.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/wobbly.cpp
      ${CMAKE_CURRENT_SOURCE_DIR}/wobbly_internal.h)
 

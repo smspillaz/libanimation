@@ -69,6 +69,41 @@
 
 namespace bg = boost::geometry;
 
+void
+wobbly::Anchor::MovableAnchorDeleter::operator () (MovableAnchor *anchor)
+{
+    delete anchor;
+}
+
+wobbly::Anchor::Anchor ()
+{
+}
+
+wobbly::Anchor::~Anchor ()
+{
+}
+
+void
+wobbly::Anchor::MoveBy (wobbly::Vector const &delta) noexcept
+{
+    priv->MoveBy (delta);
+}
+
+wobbly::Anchor
+wobbly::Anchor::Create (Impl &&impl)
+{
+    struct ConstructibleAnchor :
+        public wobbly::Anchor
+    {
+        ConstructibleAnchor (Impl &&impl)
+        {
+            priv = std::move (impl);
+        }
+    };
+
+    return ConstructibleAnchor (std::move (impl));
+}
+
 namespace
 {
     size_t
@@ -730,18 +765,19 @@ namespace
                                                   secondPref));
 
         typedef InsertedSprings IS;
-        typedef wobbly::Anchor A;
 
         /* XXX: There does not appear to be any freely-available
          * header-only libraries which permit functional
          * type apply () of the arguments of an std::tuple to
          * a function or constructor */
-        return A (new ConstrainingAnchor <IS> (std::move (handle),
-                                               std::move (result.stolen),
-                                               std::move (result.first),
-                                               std::move (result.second),
-                                               std::move (result.data),
-                                               std::move (result.anchor)));
+        using Impl = wobbly::Anchor::Impl;
+        Impl impl (new ConstrainingAnchor <IS> (std::move (handle),
+                                                std::move (result.stolen),
+                                                std::move (result.first),
+                                                std::move (result.second),
+                                                std::move (result.data),
+                                                std::move (result.anchor)));
+        return wobbly::Anchor::Create (std::move (impl));
     }
 
     class GrabAnchor
@@ -784,12 +820,15 @@ namespace
                         wobbly::AnchorArray        &anchors,
                         size_t                     index)
     {
-        using namespace wobbly;
         typedef GrabAnchor GA;
-        return Anchor (new ConstrainingAnchor <GA> (std::move (handle),
-                                                    std::move (point),
-                                                    anchors,
-                                                    index));
+
+        using Impl = wobbly::Anchor::Impl;
+        Impl impl (new wobbly::ConstrainingAnchor <GA> (std::move (handle),
+                                                        std::move (point),
+                                                        anchors,
+                                                        index));
+
+        return wobbly::Anchor::Create (std::move (impl));
     }
 }
 

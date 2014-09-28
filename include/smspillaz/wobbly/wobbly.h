@@ -164,25 +164,25 @@ namespace wobbly
 
     struct Point
     {
-        Point (double x, double y) noexcept (true) :
+        Point (double x, double y) noexcept :
             x (x),
             y (y)
         {
         }
 
-        Point () noexcept (true) :
+        Point () noexcept :
             x (0),
             y (0)
         {
         }
 
-        Point (Point const &p) noexcept (true) :
+        Point (Point const &p) noexcept :
             x (p.x),
             y (p.y)
         {
         }
 
-        void swap (Point &a, Point &b) noexcept (true)
+        void swap (Point &a, Point &b) noexcept
         {
             using std::swap;
 
@@ -190,7 +190,7 @@ namespace wobbly
             swap (a.y, b.y);
         }
 
-        Point & operator= (Point other) noexcept (true)
+        Point & operator= (Point other) noexcept
         {
             swap (*this, other);
 
@@ -257,15 +257,34 @@ namespace boost
 
 namespace wobbly
 {
-    class MovableAnchor
+    class Anchor
     {
         public:
 
-            virtual ~MovableAnchor () = default;
-            virtual void MoveBy (Vector const &delta) noexcept (true) = 0;
-    };
+            Anchor ();
+            Anchor (Anchor &&) noexcept = default;
+            Anchor & operator= (Anchor &&) noexcept = default;
+            ~Anchor ();
 
-    typedef std::unique_ptr <MovableAnchor> Anchor;
+            void MoveBy (Vector const &delta) noexcept;
+
+            class MovableAnchor;
+            struct MovableAnchorDeleter
+            {
+                void operator () (MovableAnchor *);
+            };
+
+            typedef std::unique_ptr <MovableAnchor, MovableAnchorDeleter> Impl;
+
+            static Anchor Create (Impl &&imp);
+
+        protected:
+
+            Anchor (Anchor const &) = delete;
+            Anchor & operator= (Anchor const &) = delete;
+
+            Impl priv;
+    };
 
     class Model
     {

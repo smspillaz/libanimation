@@ -62,6 +62,14 @@ namespace boost
 
 namespace wobbly
 {
+    class Anchor::MovableAnchor
+    {
+        public:
+
+            virtual ~MovableAnchor () = default;
+            virtual void MoveBy (Vector const &delta) noexcept = 0;
+    };
+
     template <class T, class F, class... A>
     struct HasNoExceptMemFn
     {
@@ -658,7 +666,7 @@ namespace wobbly
               typename = EnableIfHasNoExceptFn <Strategy,
                                                 decltype (&Strategy::MoveBy)>>
     class ConstrainingAnchor :
-        public MovableAnchor
+        public wobbly::Anchor::MovableAnchor
     {
         public:
 

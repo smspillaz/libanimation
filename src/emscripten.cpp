@@ -35,14 +35,15 @@ EMSCRIPTEN_BINDINGS (wobbly)
     em::value_object <wobbly::Point> ("WobblyPoint")
         .field ("x", &wobbly::Point::x)
         .field ("y", &wobbly::Point::y);
-/*
+
     em::value_object <wobbly::Model::Settings> ("WobblyModelSettings")
         .field ("springConstant", &wobbly::Model::Settings::springConstant)
         .field ("friction", &wobbly::Model::Settings::friction)
         .field ("maximumRange", &wobbly::Model::Settings::maximumRange);
-*/
+
     em::class_ <wobbly::Anchor> ("WobblyAnchor")
-        .function ("MoveBy", &wobbly::Anchor::MoveBy);
+        .function ("MoveBy",
+                   &wobbly::Anchor::MoveBy);
 
     em::class_ <wobbly::Model> ("WobblyModel")
         .constructor <wobbly::Point,
@@ -52,5 +53,5 @@ EMSCRIPTEN_BINDINGS (wobbly)
         .function ("MoveModelTo", &wobbly::Model::MoveModelTo)
         .function ("Step", &wobbly::Model::Step)
         .function ("DeformTexcoords", &wobbly::Model::DeformTexcoords)
-        .function ("GrabAnchor", &wobbly::Model::GrabAnchor);
+        .function ("InsertAnchor", &wobbly::Model::InsertAnchor);
 }
