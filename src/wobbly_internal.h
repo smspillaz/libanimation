@@ -832,14 +832,14 @@ namespace wobbly
                     {
                     }
 
-                    typedef std::function <void (Spring &)> Function;
+                    template <typename Function>
                     void Each (Function const &function)
                     {
                         for (auto &spring : mSprings)
                             function (spring);
                     }
 
-                    typedef std::function <void (Spring const &)> ConstFunction;
+                    template <typename ConstFunction>
                     void Each (ConstFunction const &function) const
                     {
                         for (auto const &spring : mSprings)
