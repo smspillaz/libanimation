@@ -1,4 +1,5 @@
 language: cpp
+cache: apt
 env:
  # GNU C/C++ Build
  - CC_OVERLOAD=gcc
