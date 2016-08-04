@@ -108,22 +108,6 @@ namespace
         });
     }
 
-    TEST (Spring, MoveAssignToSelf)
-    {
-        SingleObjectStorage storageA, storageB;
-
-        EXPECT_EXIT ({
-            wobbly::Spring a (storageA.Force (),
-                              storageB.Force (),
-                              storageA.Position (),
-                              storageB.Position (),
-                              wobbly::Vector (0, 0));
-
-            a = std::move (a);
-            exit (0);
-        }, ExitedWithCode (0), "");
-    }
-
     class Springs :
         public ::testing::Test
     {
