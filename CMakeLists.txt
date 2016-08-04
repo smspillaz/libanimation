@@ -16,8 +16,6 @@ set (CMAKE_MODULE_PATH
      ${LIBWOBBLY_CMAKE_MODULE_PATH}
      ${CMAKE_MODULE_PATH})
 
-include ("cmake/common/PolysquareCommon")
-
 find_package (Boost REQUIRED)
 
 # Use emscripten
@@ -49,6 +47,9 @@ if (WOBBLY_UPDATE_SUBMODULES)
                      "${GIT_EXECUTABLE} submodule update --init --recursive")
 
 endif ()
+
+# Don't include PolysquareCommon until we've at least updated submodules
+include ("cmake/common/PolysquareCommon")
 
 psq_compiler_bootstrap ()
 psq_sanitizers_bootstrap ()
