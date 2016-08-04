@@ -18,6 +18,7 @@
 #include <gmock/gmock-matchers.h>       // for EXPECT_THAT, etc
 #include <gtest/gtest-death-test.h>     // for DeathTest, ExitedWithCode, etc
 #include <gtest/gtest.h>                // for AssertHelper, TEST_F, etc
+#include <gmock/gmock.h>                // IWYU pragma: keep
 
 #include <wobbly/wobbly.h>    // for PointView, Point, Vector
 
