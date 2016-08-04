@@ -1,3 +1,9 @@
+libwobbly (0.2) eos; urgency=medium
+
+  * Update cmake modules, move to 3.0(native)
+
+ -- Sam Spilsbury <sam@endlessm.com>  Thu, 04 Aug 2016 13:45:24 +0800
+
 libwobbly (0.1-1endless1) unstable; urgency=low
 
   * Fixed distortion on maximize
