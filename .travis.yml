@@ -50,12 +50,12 @@ script:
       else
         cmake .. `echo ${CMAKE_OPTIONS}` -DCMAKE_VERBOSE_MAKEFILE=ON && make;
       fi &&
-      ./tests/smspillaz_wobbly_unit_tests &&
-      if [ -e ./tests/smspillaz_wobbly_unit_tests_asan ] ; then
-        ./tests/smspillaz_wobbly_unit_tests_asan;
+      ./tests/windowfx_wobbly_unit_tests &&
+      if [ -e ./tests/windowfx_wobbly_unit_tests_asan ] ; then
+        ./tests/windowfx_wobbly_unit_tests_asan;
       fi &&
-      if [ -e ./tests/smspillaz_wobbly_unit_tests_ubsan ] ; then
-        ./tests/smspillaz_wobbly_unit_tests_ubsan;
+      if [ -e ./tests/windowfx_wobbly_unit_tests_ubsan ] ; then
+        ./tests/windowfx_wobbly_unit_tests_ubsan;
       fi &&
       popd;
     fi
