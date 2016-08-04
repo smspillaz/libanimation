@@ -44,7 +44,8 @@ if (WOBBLY_UPDATE_SUBMODULES)
 
     find_package (Git REQUIRED)
     execute_process (COMMAND
-                     "${GIT_EXECUTABLE} submodule update --init --recursive")
+                     "${GIT_EXECUTABLE} submodule update --init --recursive"
+                     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 
 endif ()
 
