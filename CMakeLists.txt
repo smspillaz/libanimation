@@ -40,6 +40,16 @@ else (WOBBLY_ENABLE_ANALYSIS)
 
 endif (WOBBLY_ENABLE_ANALYSIS)
 
+option (WOBBLY_UPDATE_SUBMODULES "Update submodules on configure" OFF)
+
+if (WOBBLY_UPDATE_SUBMODULES)
+
+    find_package (Git REQUIRED)
+    execute_process (COMMAND
+                     "${GIT_EXECUTABLE} submodule update --init --recursive")
+
+endif ()
+
 psq_compiler_bootstrap ()
 psq_sanitizers_bootstrap ()
 psq_rules_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
