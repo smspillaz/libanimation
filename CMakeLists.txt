@@ -11,6 +11,8 @@ include (CheckCXXCompilerFlag)
 
 # Set up CMAKE_MODULE_PATH to import Google Test and Google Mock
 set (LIBWOBBLY_CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
+set (SANITIZERS_CMAKE_MODULE_PATH
+     "${LIBWOBBLY_CMAKE_MODULE_PATH}/cmake/sanitizers-cmake/cmake")
 
 set (CMAKE_MODULE_PATH
      ${LIBWOBBLY_CMAKE_MODULE_PATH}

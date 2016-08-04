@@ -61,3 +61,6 @@
 [submodule "cmake/cotire-clone"]
 	path = cmake/cotire-clone
 	url = git://github.com/sakra/cotire
+[submodule "cmake/sanitizers-cmake"]
+	path = cmake/sanitizers-cmake
+	url = git://github.com/arsenm/sanitizers-cmake
