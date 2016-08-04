@@ -41,7 +41,7 @@
 #include <boost/test/predicate_result.hpp>  // for test_tools
 #include <boost/type_traits/is_same.hpp>  // for is_same
 
-#include <gmock/gmock-matchers.h>       // for Matcher, MakeMatcher, etc
+#include <gmock/gmock.h>       // IWYU pragma: keep
 
 namespace boost
 {
