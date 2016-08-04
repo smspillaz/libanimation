@@ -48,7 +48,7 @@ script:
         scan-build cmake .. `echo ${CMAKE_OPTIONS}` &&
         scan-build --use-cc=clang-3.6 --use-c++=clang++-3.6 make;
       else
-        cmake .. `echo ${CMAKE_OPTIONS}` && make;
+        cmake .. `echo ${CMAKE_OPTIONS}` -DCMAKE_VERBOSE_MAKEFILE=ON && make;
       fi &&
       ./tests/smspillaz_wobbly_unit_tests &&
       if [ -e ./tests/smspillaz_wobbly_unit_tests_asan ] ; then
