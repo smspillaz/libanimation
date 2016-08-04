@@ -270,7 +270,7 @@ namespace
 
         assert (springs.size () == nSprings);
 
-        return std::move (springs);
+        return springs;
     }
 }
 

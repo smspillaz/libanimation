@@ -880,7 +880,7 @@ namespace wobbly
 
                        TemporaryOwner <Spring> tmp (std::move (steal),
                                                     replacer);
-                       return std::move (tmp);
+                       return tmp;
                     }
 
                     TemporaryOwner <Spring::ID>
@@ -918,7 +918,7 @@ namespace wobbly
 
                         TemporaryOwner <Spring::ID> tmp (std::move (package.id),
                                                          remover);
-                        return std::move (tmp);
+                        return tmp;
                     }
 
                 private:
@@ -968,7 +968,7 @@ namespace wobbly
                         };
                         
                         TemporaryOwner <ID> tmp (ID (index), revert);
-                        return std::move (tmp);
+                        return tmp;
                     }
                     
                     void MoveBy (wobbly::Vector const &delta)
