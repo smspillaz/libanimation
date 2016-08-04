@@ -2,6 +2,7 @@ cdbs
 clang
 clang-3.6
 cmake
+cmake-data
 cppcheck
 debhelper
 devscripts
