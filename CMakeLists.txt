@@ -72,7 +72,7 @@ set (LIBWOBBLY_EXTERNAL_LIBRARIES
      ${Boost_LIBRARIES})
 
 # Install package names
-set (LIBWOBBLY_NAMESPACE smspillaz
+set (LIBWOBBLY_NAMESPACE windowfx
      CACHE STRING "Namespace owner of library")
 set (LIBWOBBLY_PACKAGE wobbly)
 
