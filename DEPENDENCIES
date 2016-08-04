@@ -1,5 +1,5 @@
 cdbs
-clang-3.6
+clang-3.8
 cmake
 cmake-data
 cppcheck
