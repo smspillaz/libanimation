@@ -38,9 +38,6 @@ before_install:
   - if [[ $COVERAGE == 1 ]] ; then sudo pip install cpp-coveralls; fi
 script:
   - if [[ $DEBIAN_BUILD == 1 ]] ; then
-      pushd .. &&
-      tar -czvf libwobbly_0.1.orig.tar.gz libwobbly/ &&
-      popd &&
       debuild -i -us -uc -b;
     else
       mkdir build &&
