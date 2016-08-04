@@ -13,11 +13,11 @@ set (LIBWOBBLY_MATCHERS_SOURCES
      ${CMAKE_CURRENT_SOURCE_DIR}/mathematical_model_matcher.cpp
      ${LIBWOBBLY_MATCHERS_EXPORT_HEADERS})
 
-polysquare_add_matcher (${LIBWOBBLY_MATCHERS_LIBRARY}
-                        EXPORT_HEADER_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                        INTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXPORTED_INCLUDE_DIRS}
-                        EXTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXTERNAL_INCLUDE_DIRS}
-                        SOURCES ${LIBWOBBLY_MATCHERS_SOURCES}
-                        LIBRARIES ${LIBWOBBLY_MATCHERS_LIBRARIES}
-                        CLANG_TIDY_DISABLE_CHECKS
-                        misc-braces-around-statements)
+psq_add_matcher (${LIBWOBBLY_MATCHERS_LIBRARY}
+                 EXPORT_HEADER_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                 INTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXPORTED_INCLUDE_DIRS}
+                 EXTERNAL_INCLUDE_DIRS ${LIBWOBBLY_EXTERNAL_INCLUDE_DIRS}
+                 SOURCES ${LIBWOBBLY_MATCHERS_SOURCES}
+                 LIBRARIES ${LIBWOBBLY_MATCHERS_LIBRARIES}
+                 CLANG_TIDY_DISABLE_CHECKS
+                 misc-braces-around-statements)

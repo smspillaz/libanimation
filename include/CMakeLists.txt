@@ -11,10 +11,10 @@ set (LIBWOBBLY_PACKAGE_PUBLIC_HEADERS_DIR
 set (LIBWOBBLY_HEADERS
      ${LIBWOBBLY_PACKAGE_PUBLIC_HEADERS_DIR}/wobbly.h)
 
-polysquare_add_checked_sources (wobbly_headers
-                                SOURCES ${LIBWOBBLY_HEADERS}
-                                CLANG_TIDY_DISABLE_CHECKS
-                                misc-braces-around-statements)
+psq_add_checked_sources (wobbly_headers
+                         SOURCES ${LIBWOBBLY_HEADERS}
+                         CLANG_TIDY_DISABLE_CHECKS
+                         misc-braces-around-statements)
 
 set (INSTALL_DIR
      ${CMAKE_INSTALL_PREFIX}/include/${LIBWOBBLY_NAMESPACE})

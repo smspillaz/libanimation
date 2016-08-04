@@ -10,15 +10,13 @@ cmake_minimum_required (VERSION 2.8 FATAL_ERROR)
 include (CheckCXXCompilerFlag)
 
 # Set up CMAKE_MODULE_PATH to import Google Test and Google Mock
-set (LIBWOBBLY_CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-set (LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH
-     ${LIBWOBBLY_CMAKE_MODULE_PATH}/common)
+set (LIBWOBBLY_CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}")
 
 set (CMAKE_MODULE_PATH
-     ${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH}
+     ${LIBWOBBLY_CMAKE_MODULE_PATH}
      ${CMAKE_MODULE_PATH})
 
-include (PolysquareCommon)
+include ("cmake/common/PolysquareCommon")
 
 find_package (Boost REQUIRED)
 
@@ -42,13 +40,12 @@ else (WOBBLY_ENABLE_ANALYSIS)
 
 endif (WOBBLY_ENABLE_ANALYSIS)
 
-polysquare_compiler_bootstrap ()
-polysquare_sanitizers_bootstrap ()
-polysquare_rules_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH}
-                            ${CMAKE_BINARY_DIR})
-polysquare_gmock_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
-polysquare_coverage_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
-polysquare_acceleration_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
+psq_compiler_bootstrap ()
+psq_sanitizers_bootstrap ()
+psq_rules_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
+psq_gmock_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
+psq_coverage_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
+psq_acceleration_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
 
 check_cxx_compiler_flag ("-Wno-unused-local-typedefs"
                          WOBBLY_HAVE_NO_UNUSED_LOCAL_TYPEDEFS)
