@@ -9,6 +9,10 @@ env:
  - CC_OVERLOAD=clang-3.8
    CXX_OVERLOAD=clang++-3.8
    CMAKE_OPTIONS="`cat .ci-libwobbly-sanitization-options`"
+ # Analysis Build
+ - CC_OVERLOAD=clang-3.8
+   CXX_OVERLOAD=clang++-3.8
+   CMAKE_OPTIONS="`cat .ci-libwobbly-analysis-options`"
  # GCov Coverage Build
  - CC_OVERLOAD=gcc
    CXX_OVERLOAD=g++
