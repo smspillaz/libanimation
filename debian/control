@@ -1,6 +1,6 @@
 Source: libwobbly
 Priority: extra
-Maintainer: Sam Spilsbury <smspillaz@unknown>
+Maintainer: Sam Spilsbury <sam@endlessm.com>
 Build-Depends: debhelper (>= 8.0.0),
                cdbs,
                cmake,
