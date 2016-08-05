@@ -1,0 +1,12 @@
+cdbs
+clang-3.8
+cmake
+cmake-data
+cppcheck
+debhelper
+devscripts
+g++-4.8
+gcc-4.8
+libstdc++6
+libboost1.54-dev
+vera++

@@ -1,0 +1,22 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+# Sample debian/rules that uses debhelper.
+# This file was originally written by Joey Hess and Craig Small.
+# As a special exception, when this file is copied by dh-make into a
+# dh-make output file, you may use that output file without restriction.
+# This special exception was added by Craig Small in version 0.37 of dh-make.
+
+# There's a bug in older versions of g++ which causes this warning to be
+# triggered for any usage of boost::optional.
+#
+# See: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=47679
+CFLAGS += -Wno-error=maybe-uninitialized
+CXXFLAGS += -Wno-error=maybe-uninitialized
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/cmake.mk
+
+DEB_CMAKE_NORMAL_ARGS += -DWOBBLY_ENABLE_ANALYSIS=OFF -DWOBBLY_UPDATE_SUBMODULES=ON -DPOLYSQUARE_USE_PRECOMPILED_HEADERS=OFF -DPOLYSQUARE_BUILD_TESTS=OFF
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE

@@ -1,0 +1,63 @@
+[submodule "include/third_party/allow_move_optional"]
+	path = include/third_party/allow_move_optional
+	url = git://github.com/smspillaz/CopyMoveConstrainedOptional
+[submodule "cmake/common"]
+	path = cmake/common
+	url = git://github.com/polysquare/common-universal-cmake
+[submodule "cmake/cmake-include-guard"]
+	path = cmake/cmake-include-guard
+	url = git://github.com/polysquare/cmake-include-guard
+[submodule "cmake/cmake-forward-arguments"]
+	path = cmake/cmake-forward-arguments
+	url = git://github.com/polysquare/cmake-forward-arguments
+[submodule "cmake/sanitize-target-cmake"]
+	path = cmake/sanitize-target-cmake
+	url = git://github.com/polysquare/sanitize-target-cmake
+[submodule "cmake/gcov-cmake"]
+	path = cmake/gcov-cmake
+	url = git://github.com/polysquare/gcov-cmake
+[submodule "cmake/cppcheck-target-cmake"]
+	path = cmake/cppcheck-target-cmake
+	url = git://github.com/polysquare/cppcheck-target-cmake
+[submodule "cmake/clang-tidy-target-cmake"]
+	path = cmake/clang-tidy-target-cmake
+	url = git://github.com/polysquare/clang-tidy-target-cmake
+[submodule "cmake/iwyu-target-cmake"]
+	path = cmake/iwyu-target-cmake
+	url = git://github.com/polysquare/iwyu-target-cmake
+[submodule "cmake/verapp-cmake"]
+	path = cmake/verapp-cmake
+	url = git://github.com/polysquare/verapp-cmake
+[submodule "cmake/gmock-cmake"]
+	path = cmake/gmock-cmake
+	url = git://github.com/polysquare/gmock-cmake
+[submodule "cmake/tooling-cmake-util"]
+	path = cmake/tooling-cmake-util
+	url = git://github.com/polysquare/tooling-cmake-util
+[submodule "cmake/tooling-find-pkg-util"]
+	path = cmake/tooling-find-pkg-util
+	url = git://github.com/polysquare/tooling-find-pkg-util
+[submodule "cmake/cmake-header-language"]
+	path = cmake/cmake-header-language
+	url = git://github.com/polysquare/cmake-header-language
+[submodule "cmake/accelerate-target-cmake"]
+	path = cmake/accelerate-target-cmake
+	url = git://github.com/polysquare/accelerate-target-cmake
+[submodule "cmake/cmake-multi-targets"]
+	path = cmake/cmake-multi-targets
+	url = git://github.com/polysquare/cmake-multi-targets
+[submodule "cmake/cmake-imported-project"]
+	path = cmake/cmake-imported-project
+	url = git://github.com/polysquare/cmake-imported-project
+[submodule "cmake/cmake-spacify-list"]
+	path = cmake/cmake-spacify-list
+	url = git://github.com/polysquare/cmake-spacify-list
+[submodule "cmake/cmake-opt-arg-parsing"]
+	path = cmake/cmake-opt-arg-parsing
+	url = git://github.com/polysquare/cmake-opt-arg-parsing
+[submodule "cmake/cmake-forward-cache"]
+	path = cmake/cmake-forward-cache
+	url = git://github.com/polysquare/cmake-forward-cache
+[submodule "cmake/cotire-clone"]
+	path = cmake/cotire-clone
+	url = git://github.com/sakra/cotire
