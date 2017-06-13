@@ -1,4 +1,4 @@
-libwobbly (0.2-1) eos; urgency=medium
+libwobbly (0.2.1) eos; urgency=medium
 
   * cmake: Add SOVERSION to library (credit: Robert McQueen)
 
