@@ -97,6 +97,12 @@ set (LIBWOBBLY_MATCHERS_LIBRARY ${LIBWOBBLY_NAMESPACE}_wobbly_matchers)
 set (LIBWOBBLY_UNIT_TESTS_BINARY
      ${LIBWOBBLY_NAMESPACE}_wobbly_unit_tests)
 
+# Versioning
+set (LIBWOBBLY_VERSION_MAJOR 0) # API breaks, symbol removals, etc
+set (LIBWOBBLY_VERSION_MINOR 2) # API additions
+set (LIBWOBBLY_VERSION_PATCH 0) # code changes with no API imact
+set (LIBWOBBLY_VERSION ${LIBWOBBLY_VERSION_MAJOR}.${LIBWOBBLY_VERSION_MINOR}.${LIBWOBBLY_VERSION_PATCH})
+
 add_subdirectory (src)
 add_subdirectory (matchers)
 add_subdirectory (tests)

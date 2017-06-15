@@ -6,6 +6,6 @@ libname=@LIBWOBBLY_NAMESPACE@_wobbly
 
 Name: libwobbly
 Description: Library to provide a spring-controlled bezier mesh
-Version: 0.1
+Version: @LIBWOBBLY_VERSION@
 Libs: -L${libdir} -l${libname}
 Cflags: -I${includedir}
