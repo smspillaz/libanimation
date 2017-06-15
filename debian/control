@@ -17,7 +17,7 @@ Vcs-Git: git://github.com/smspillaz/libwobbly.git
 Package: libwobbly-dev
 Section: libdevel
 Architecture: any
-Depends: libwobbly (= ${binary:Version}),
+Depends: libwobbly0 (= ${binary:Version}),
          libboost1.54-dev |
          libboost1.53-dev |
          libboost1.49-dev |
