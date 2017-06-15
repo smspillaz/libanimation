@@ -1,3 +1,9 @@
+libwobbly (0.2-1) eos; urgency=medium
+
+  * cmake: Add SOVERSION to library (credit: Robert McQueen)
+
+ -- Sam Spilsbury <sam@endlessm.com>  Wed, 14 Jun 2017 03:08:29 +0800
+
 libwobbly (0.2) eos; urgency=medium
 
   * Update cmake modules, move to 3.0(native)
