@@ -26,7 +26,7 @@ Depends: libwobbly (= ${binary:Version}),
 Description: Wobbly Mesh Library
  Wobbly Mesh
 
-Package: libwobbly
+Package: libwobbly0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}

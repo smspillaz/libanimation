@@ -39,5 +39,9 @@ psq_add_checked_sources (check_boost_geometry_prefix_header
                          clang-diagnostic-unused-local-typedef
                          misc-braces-around-statements)
 
+set_target_properties (${LIBWOBBLY_LIBRARY} PROPERTIES
+                       VERSION ${LIBWOBBLY_VERSION}
+                       SOVERSION ${LIBWOBBLY_VERSION_MAJOR})
+
 install (TARGETS ${LIBWOBBLY_LIBRARY}
          LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX}/lib)
