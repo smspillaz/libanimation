@@ -19,7 +19,7 @@ set (CMAKE_MODULE_PATH
      ${SANITIZERS_CMAKE_MODULE_PATH}
      ${CMAKE_MODULE_PATH})
 
-find_package (Boost REQUIRED)
+find_package (Boost 1.62 REQUIRED)
 
 # Use emscripten
 option (WOBBLY_EMSCRIPTEN "Use emscripten" OFF)
