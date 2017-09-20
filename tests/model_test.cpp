@@ -310,11 +310,11 @@ namespace
                               << candidate << ")" << " with delta ("
                               << delta << ") is " << distTanTheta;
 
-                namespace btt = boost::test_tools;
+                namespace bfpc = boost::math::fpc;
                 typedef decltype (vecTanTheta) NumericType;
-                auto tolerance = btt::percent_tolerance (10e-9);
+                auto tolerance = bfpc::percent_tolerance (10e-9);
                 auto within  =
-                    btt::close_at_tolerance <NumericType> (tolerance);
+                    bfpc::close_at_tolerance <NumericType> (tolerance);
                 return within (vecTanTheta, distTanTheta);
             }
 

@@ -437,7 +437,7 @@ namespace wobbly
     namespace matchers
     {
         namespace t = ::testing;
-        namespace btt = ::boost::test_tools;
+        namespace bfpc = ::boost::math::fpc;
         namespace bg = boost::geometry;
 
         template <typename GeometryType, typename Compare>
@@ -480,13 +480,13 @@ namespace wobbly
                         /* If we are comparing to zero, then use
                          * check_is_small as opposed to check_is_close */
                         if (bg::get <D> (rhs) == 0.0)
-                            result = btt::check_is_small (bg::get <D> (lhs),
-                                                          10e-9);
+                            result = bfpc::is_small (bg::get <D> (lhs),
+                                                     10e-9);
                         else
                         {
-                            auto tolerance = btt::percent_tolerance (10e-9);
+                            auto tolerance = bfpc::percent_tolerance (10e-9);
                             auto within  =
-                                btt::close_at_tolerance <LTT> (tolerance);
+                                bfpc::close_at_tolerance <LTT> (tolerance);
                             result = within (bg::get <D> (lhs),
                                              bg::get <D> (rhs));
                         }
@@ -716,9 +716,9 @@ namespace wobbly
                                 << std::endl;
 
                         /* Close to specified tolerance */
-                        auto tolerance = btt::percent_tolerance (mTolerance);
+                        auto tolerance = bfpc::percent_tolerance (mTolerance);
                         auto within  =
-                            btt::close_at_tolerance <NumericType> (tolerance);
+                            bfpc::close_at_tolerance <NumericType> (tolerance);
 
                         if (!within (modelPrediction, actual))
                         {
