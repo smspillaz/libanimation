@@ -25,6 +25,10 @@
 #include <type_traits>                  // for move, enable_if, etc
 #include <vector>                       // for vector
 
+#include <boost/geometry/algorithms/assign.hpp>  // for assign
+#include <boost/geometry/algorithms/distance.hpp>
+#include <boost/geometry/arithmetic/arithmetic.hpp>  // for add_point, etc
+
 #include <assert.h>                     // for assert
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
@@ -35,7 +39,18 @@
 #include <third_party/allow_move_optional/optional.hpp>  // for optional
 
 #include <wobbly/wobbly.h>    // for PointView, Vector, Point, etc
-#include "boost_geometry.h"             // IWYU pragma: keep
+
+namespace boost
+{
+    namespace geometry
+    {
+        namespace concept
+        {
+            template <typename Geometry> class ConstPoint;
+            template <typename Geometry> class Point;
+        }
+    }
+}
 
 namespace wobbly
 {
@@ -171,7 +186,7 @@ namespace wobbly
             for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
             {
                 wobbly::PointView <double> view (points, i);
-                double objectDistance = bg::fixups::distance (pos, view);
+                double objectDistance = bg::distance (pos, view);
                 if (objectDistance < distance)
                 {
                     nearestIndex = i;
@@ -1113,7 +1128,7 @@ namespace wobbly
             namespace bg = boost::geometry;
 
             wobbly::Vector acceleration;
-            bg::fixups::assign_point (acceleration, force);
+            bg::assign_point (acceleration, force);
             bg::divide_value (acceleration, mass);
 
             /* v[t] = v[t - 1] + at */
@@ -1141,13 +1156,13 @@ wobbly::EulerIntegrate (double                           time,
     /* Apply friction, which is exponentially
      * proportional to both velocity and time */
     wobbly::Vector totalForce;
-    bg::fixups::assign_point (totalForce, force);
+    bg::assign_point (totalForce, force);
 
     wobbly::Vector frictionForce;
     bg::assign_point (frictionForce, velocity);
     bg::multiply_value (frictionForce, friction);
 
-    bg::fixups::subtract_point (totalForce, frictionForce);
+    bg::subtract_point (totalForce, frictionForce);
 
     /* First apply velocity change for force
      * exerted over time */

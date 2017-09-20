@@ -15,8 +15,6 @@
 
 #include <wobbly/wobbly.h>    // for PointView
 
-#include "boost_geometry.h"             // IWYU pragma: keep
-
 using ::testing::Test;
 using ::testing::Values;
 using ::testing::WithParamInterface;

@@ -23,7 +23,6 @@
 #include <wobbly/wobbly.h>    // for PointView, Point, Vector
 
 #include <wobbly_internal.h>            // for Spring, etc
-#include "boost_geometry.h"             // IWYU pragma: keep
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <ostream_point_operator.h>     // for operator<<

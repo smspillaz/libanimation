@@ -38,7 +38,6 @@
 #include <wobbly/wobbly.h>    // for Point, PointView, Vector, etc
 
 #include <wobbly_internal.h>            // for MeshArray, SpringMesh, etc
-#include "boost_geometry.h"             // IWYU pragma: keep
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <ostream_point_operator.h>     // for operator<<
@@ -299,7 +298,7 @@ namespace
 
                 wobbly::Vector delta;
                 bg::assign (delta, candidate);
-                bg::fixups::subtract_point (delta, origin);
+                bg::subtract_point (delta, origin);
 
                 auto vecTanTheta = bg::get <1> (vec) / bg::get <0> (vec);
                 auto distTanTheta = bg::get <1> (delta) / bg::get <0> (delta);
@@ -311,11 +310,11 @@ namespace
                               << candidate << ")" << " with delta ("
                               << delta << ") is " << distTanTheta;
 
-                namespace btt = boost::test_tools;
+                namespace bfpc = boost::math::fpc;
                 typedef decltype (vecTanTheta) NumericType;
-                auto tolerance = btt::percent_tolerance (10e-9);
+                auto tolerance = bfpc::percent_tolerance (10e-9);
                 auto within  =
-                    btt::close_at_tolerance <NumericType> (tolerance);
+                    bfpc::close_at_tolerance <NumericType> (tolerance);
                 return within (vecTanTheta, distTanTheta);
             }
 
