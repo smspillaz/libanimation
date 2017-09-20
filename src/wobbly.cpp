@@ -68,7 +68,6 @@
 
 #include <wobbly/wobbly.h>    // for PointView, Model, Point, etc
 
-#include "boost_geometry.h"             // IWYU pragma: keep
 #include "wobbly_internal.h"            // for Spring, MeshArray, etc
 
 namespace bg = boost::geometry;
@@ -303,7 +302,7 @@ namespace
 
         vector.Each ([&](Spring const &spring) {
             double currentSpringPrimaryDistance =
-                ::bg::fixups::distance (spring.FirstPosition (), install);
+                ::bg::distance (spring.FirstPosition (), install);
             if (currentSpringPrimaryDistance < primaryDistance)
             {
                 primaryDistance = currentSpringPrimaryDistance;
@@ -316,7 +315,7 @@ namespace
             if (currentSpringPrimaryDistance == primaryDistance)
             {
                 double currentSpringSecondaryDistance =
-                    ::bg::fixups::distance (spring.SecondPosition (), install);
+                    ::bg::distance (spring.SecondPosition (), install);
                 if (currentSpringSecondaryDistance < secondaryDistance)
                 {
                     found = spring;
@@ -369,8 +368,8 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
             PointView <double> anchorForce (data.get (), 1);
 
             Vector delta;
-            bg::fixups::assign_point (delta, desiredPoint);
-            bg::fixups::subtract_point (delta, anchorPoint);
+            bg::assign_point (delta, desiredPoint);
+            bg::subtract_point (delta, anchorPoint);
 
             return mSprings.EmplaceAndTrack (std::move (anchorForce),
                                              std::move (meshForce),
@@ -626,7 +625,7 @@ wobbly::Model::Private::TargetPosition () const
 
     /* Model will be settled, return the top left point */
     wobbly::Point result;
-    bg::fixups::assign_point (result, wobbly::PointView <double const> (points,
+    bg::assign_point (result, wobbly::PointView <double const> (points,
                                                                         0));
 
     return result;
@@ -1006,7 +1005,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
             double const maximumRange = threshold;
 
             wobbly::PointView <double> point (points, i);
-            double range = bg::fixups::distance (target, point);
+            double range = bg::distance (target, point);
 
             if (range < maximumRange)
                 continue;
@@ -1023,7 +1022,7 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
                                     newRange * sin);
 
             /* Offset from the "target" position */
-            bg::fixups::assign_point (point, target);
+            bg::assign_point (point, target);
             bg::subtract_point (point, newDelta);
         }
 

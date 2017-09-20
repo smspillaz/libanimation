@@ -22,7 +22,6 @@
 #include <wobbly/wobbly.h>    // for PointView, Point, Vector
 
 #include <wobbly_internal.h>            // for EulerIntegrate
-#include "boost_geometry.h"             // IWYU pragma: keep
 
 #include <mathematical_model_matcher.h>  // for SatisfiesModel, Linear, etc
 
