@@ -434,6 +434,21 @@ namespace wobbly
         };
     }
 
+    namespace testing
+    {
+        template <typename T, typename U, typename V>
+        bool close_at_tolerance (T const &lhs, U const &rhs, V const &epsilon)
+        {
+            return std::fabs (rhs - lhs) < epsilon;
+        }
+
+        template <typename T, typename U>
+        bool is_small (T const &value, U const &epsilon)
+        {
+            return close_at_tolerance (value, std::numeric_limits <T>::min(), epsilon);
+        }
+    }
+
     namespace matchers
     {
         namespace t = ::testing;
