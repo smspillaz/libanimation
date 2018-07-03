@@ -5,7 +5,6 @@
  *
  * Implicitly depends on:
  *  - std::array
- *  - boost::geometry
  *
  * See LICENCE.md for Copyright information
  */
@@ -20,11 +19,8 @@
 #include <type_traits>
 #include <vector>
 
-#include <boost/geometry/geometry.hpp> // IWYU pragma: keep
-#include <boost/geometry/core/access.hpp>  // for access
-#include <boost/geometry/core/cs.hpp>   // for cartesian
-#include <boost/geometry/core/tags.hpp>  // for geometry
-#include <boost/geometry/geometries/register/point.hpp>
+#include <wobbly/geometry.h>
+#include <wobbly/geometry_traits.h>
 
 /* std::swap is explicitly specialized for numerous other types we don't care
  * about */
@@ -47,244 +43,20 @@
 
 namespace wobbly
 {
-    namespace bg = boost::geometry;
-
-    namespace detail
-    {
-        struct CopyablePV
-        {
-            public:
-
-                CopyablePV (CopyablePV const &copy) = default;
-                CopyablePV & operator= (CopyablePV const &copy) = default;
-        };
-
-        struct NoncopyablePV
-        {
-            public:
-
-                NoncopyablePV (NoncopyablePV const &copy) = delete;
-                NoncopyablePV & operator= (NoncopyablePV const &copy) = delete;
-        };
-
-        template <typename NumericType>
-        class PointViewCopyabilityBase
-        {
-            public:
-                typedef NumericType NT;
-                typedef std::is_const <NumericType> IC;
-                typedef std::conditional <IC::value,
-                                          CopyablePV,
-                                          NoncopyablePV> type;
-        };
-    }
+    /* Import wobbly::geometry::Point types into
+     * wobbly namespace for compatibility. */
+    typedef wobbly::geometry::Point Point;
+    typedef wobbly::geometry::Vector Vector;
 
     template <typename NumericType>
-    class PointView :
-        public detail::PointViewCopyabilityBase <NumericType>::type
-    {
-        public:
+    using PointView = wobbly::geometry::PointView <NumericType>;
 
-            typedef NumericType NT;
-            typedef typename std::remove_const <NumericType>::type NTM;
-            typedef typename std::add_const <NumericType>::type NTC;
+    template <typename NumericType>
+    using PointModel = wobbly::geometry::PointModel <NumericType>;
 
-            typedef typename std::is_const <NT> IC;
+    template <typename PointType>
+    using Box = wobbly::geometry::Box <PointType>;
 
-            template <std::size_t N>
-            PointView (std::array <NTM, N> &points,
-                       std::size_t         index) :
-                array (points.data ()),
-                offset (index * 2)
-            {
-            }
-
-            template <std::size_t N,
-                      typename = typename std::enable_if <IC::value && N>::type>
-            PointView (std::array <NTM, N> const &points,
-                       std::size_t               index) :
-                array (points.data ()),
-                offset (index * 2)
-            {
-            }
-
-            PointView (NumericType *points,
-                       std::size_t index) :
-                array (points),
-                offset (index * 2)
-            {
-            }
-
-            PointView (PointView <NumericType> &&view) :
-                array (view.array),
-                offset (view.offset)
-            {
-            }
-
-            PointView &
-            operator= (PointView <NumericType> &&view) noexcept
-            {
-                if (this == &view)
-                    return *this;
-
-                array = view.array;
-                offset = view.offset;
-
-                return *this;
-            }
-
-            /* Copy constructor and assignment operator enabled only if the view
-             * is truly just observing and has no write access to the point,
-             * see detail::PointViewCopyabilityBase */
-            PointView (PointView <NumericType> const &p) :
-                array (p.array),
-                offset (p.offset)
-            {
-            }
-
-            friend void swap (PointView <NumericType> &first,
-                              PointView <NumericType> &second)
-            {
-                using std::swap;
-                swap (first.array, second.array);
-                swap (first.offset, second.offset);
-            }
-
-            PointView &
-            operator= (PointView <NumericType> const &p)
-            {
-                PointView <NumericType> copy (p);
-                swap (*this, copy);
-                return *this;
-            }
-
-            /* cppcheck thinks this is a constructor, so we need to suppress
-             * a constructor warning here.
-             */
-            // cppcheck-suppress uninitMemberVar
-            operator PointView <NTC> ()
-            {
-                /* The stored offset is an array offset, but the constructor
-                 * requires a point offset. Divide by two */
-                return PointView <NTC> (array, offset / 2);
-            }
-
-            template <size_t Offset>
-            NumericType const & get () const
-            {
-                static_assert (Offset < 2, "Offset must be < 2");
-                return array[offset + Offset];
-            }
-
-            template <size_t Offset>
-            typename std::enable_if <!(IC::value) && (Offset + 1), void>::type
-            set (NumericType value)
-            {
-                static_assert (Offset < 2, "Offset must be < 2");
-                array[offset + Offset] = value;
-            }
-
-        private:
-
-            NumericType *array;
-            size_t      offset;
-    };
-
-    struct Point
-    {
-        Point (double x, double y) noexcept :
-            x (x),
-            y (y)
-        {
-        }
-
-        Point () noexcept :
-            x (0),
-            y (0)
-        {
-        }
-
-        Point (Point const &p) noexcept :
-            x (p.x),
-            y (p.y)
-        {
-        }
-
-        void swap (Point &a, Point &b) noexcept
-        {
-            using std::swap;
-
-            swap (a.x, b.x);
-            swap (a.y, b.y);
-        }
-
-        Point & operator= (Point other) noexcept
-        {
-            swap (*this, other);
-
-            return *this;
-        }
-
-        double x;
-        double y;
-    };
-
-    typedef Point Vector;
-}
-
-BOOST_GEOMETRY_REGISTER_POINT_2D (wobbly::Point,
-                                  double,
-                                  wobbly::bg::cs::cartesian, x, y)
-
-BOOST_GEOMETRY_REGISTER_POINT_2D_GET_SET (wobbly::PointView <double>,
-                                          double,
-                                          wobbly::bg::cs::cartesian,
-                                          wobbly::PointView <double>::get <0>,
-                                          wobbly::PointView <double>::get <1>,
-                                          wobbly::PointView <double>::set <0>,
-                                          wobbly::PointView <double>::set <1>);
-
-/* Register the const-version of PointView. We are not using the
- * provided macro as non exists for a const-version */
-namespace boost
-{
-    namespace geometry
-    {
-        namespace traits
-        {
-            namespace wobbly
-            {
-                typedef ::wobbly::PointView <double const> DPV;
-            }
-
-            BOOST_GEOMETRY_DETAIL_SPECIALIZE_POINT_TRAITS (wobbly::DPV,
-                                                           2,
-                                                           double,
-                                                           cs::cartesian);
-
-            template <>
-            struct access <wobbly::DPV, 0>
-            {
-                static inline double get (wobbly::DPV const &p)
-                {
-                    return p.get <0> ();
-                }
-            };
-
-            template <>
-            struct access <wobbly::DPV, 1>
-            {
-                static inline double get (wobbly::DPV const &p)
-                {
-                    return p.get <1> ();
-                }
-            };
-        }
-    }
-}
-
-namespace wobbly
-{
     class Anchor
     {
         public:

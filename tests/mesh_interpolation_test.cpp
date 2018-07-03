@@ -12,8 +12,6 @@
 
 #include <math.h>                       // for pow, ceil
 
-#include <boost/test/utils/wrap_stringstream.hpp>  // for operator<<
-
 #include <stddef.h>                     // for size_t
 
 #include <gmock/gmock-matchers.h>       // for Matcher, ElementsAreArray, etc
@@ -42,10 +40,10 @@ using ::wobbly::matchers::WithTolerance;
 
 using ::wobbly::models::Linear;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     constexpr double TextureWidth = 50.0f;
     constexpr double TextureHeight = 100.0f;
     wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
@@ -77,8 +75,8 @@ namespace
             {
                 wobbly::PointView <double> pv (positions,
                                                i * meshWidth + j);
-                bg::assign_point (pv, wobbly::Point (tileWidth * j,
-                                                     tileHeight * i));
+                wgd::assign (pv, wobbly::Point (tileWidth * j,
+                                                tileHeight * i));
             }
         }
     }
@@ -156,13 +154,13 @@ namespace
         using namespace std::placeholders;
 
         ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            bg::multiply_value (pv, 2);
+            wgd::scale (pv, 2);
         }, _1));
 
         unsigned int const nSamples = 10;
         std::function <double (int)> horizontalDeformation =
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return bg::get <0> (p);
+                                        return wgd::get <0> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -178,13 +176,13 @@ namespace
         using namespace std::placeholders;
 
         ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            bg::multiply_value (pv, 2);
+            wgd::scale (pv, 2);
         }, _1));
 
         unsigned int const nSamples = 10;
         std::function <double (int)> verticalDeformation =
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return bg::get <1> (p);
+                                        return wgd::get <1> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -206,13 +204,13 @@ namespace
         typedef wobbly::PointView <double> DoublePointView;
 
         ApplyTransformation ([](DoublePointView &pv, size_t x, size_t y) {
-             bg::multiply_point (pv, wobbly::Point (x, y));
+             wgd::pointwise_scale (pv, wobbly::Point (x, y));
         });
 
         unsigned int const nSamples = 10;
         std::function <double (int)> horizontalDeformation =
             UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                         return bg::get <0> (p);
+                                         return wgd::get <0> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -237,21 +235,12 @@ namespace
         EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
     }
 
-    class PointCeilingOperation
-    {
-        public:
-
-            template <typename P, int I>
-            void apply (P &point) const
-            {
-                bg::set <I> (point, std::ceil (bg::get <I> (point)));
-            }
-    };
-
     template <typename Point>
     void PointCeiling (Point &p)
     {
-        bg::for_each_coordinate (p, PointCeilingOperation ());
+        wgd::for_each_coordinate (p, [](auto const &coord) -> decltype(auto) {
+            return std::ceil (coord);
+        });
     }
 
     class BezierMeshPoints :
@@ -262,10 +251,11 @@ namespace
 
     wobbly::Point TexturePrediction (wobbly::Point const &unit)
     {
-        wobbly::Point textureRelative (bg::get <1> (unit),
-                                       bg::get <0> (unit));
-        bg::multiply_point (textureRelative,
-                            wobbly::Point (TextureWidth, TextureHeight));
+        wobbly::Point textureRelative (wgd::get <1> (unit),
+                                       wgd::get <0> (unit));
+        wgd::pointwise_scale (textureRelative,
+                              wobbly::Point (TextureWidth,
+                                             TextureHeight));
         PointCeiling (textureRelative);
         return textureRelative;
     }

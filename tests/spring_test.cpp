@@ -13,8 +13,6 @@
 
 #include <stdlib.h>                     // for exit
 
-#include <boost/test/utils/wrap_stringstream.hpp>  // for operator<<
-
 #include <gmock/gmock-matchers.h>       // for EXPECT_THAT, etc
 #include <gtest/gtest-death-test.h>     // for DeathTest, ExitedWithCode, etc
 #include <gtest/gtest.h>                // for AssertHelper, TEST_F, etc
@@ -36,10 +34,10 @@ using ::wobbly::matchers::SatisfiesModel;
 
 using ::wobbly::models::Linear;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     class SingleObjectStorage
     {
         public:
@@ -123,12 +121,12 @@ namespace
                         secondStorage.Position (),
                         desiredDistance)
             {
-                bg::assign_point (first.position,
-                                  wobbly::Point (FirstPositionX,
-                                                 FirstPositionY));
-                bg::assign_point (second.position,
-                                  wobbly::Point (SecondPositionX,
-                                                 SecondPositionY));
+                wgd::assign (first.position,
+                             wobbly::Point (FirstPositionX,
+                                            FirstPositionY));
+                wgd::assign (second.position,
+                             wobbly::Point (SecondPositionX,
+                                            SecondPositionY));
             }
 
         protected:
@@ -164,20 +162,20 @@ namespace
                     wobbly::Vector const &desired)
     {
         wobbly::Vector expectedForce;
-        bg::assign (expectedForce, second);
-        bg::subtract_point (expectedForce, first);
-        bg::subtract_point (expectedForce, desired);
-        bg::multiply_value (expectedForce, SpringConstant);
-        bg::divide_value (expectedForce, 2);
+        wgd::assign (expectedForce, second);
+        wgd::pointwise_subtract (expectedForce, first);
+        wgd::pointwise_subtract (expectedForce, desired);
+        wgd::scale (expectedForce, SpringConstant);
+        wgd::scale (expectedForce, 1 / 2.0);
 
         return expectedForce;
     }
 
     TEST_F (Springs, ForceAppliedToFirstObjectProportianalToPositiveDistanceSK)
     {
-        bg::assign (first.position,
-                    wobbly::Vector (FirstPositionX - 10.0f,
-                                    FirstPositionY - 10.0f));
+        wgd::assign (first.position,
+                     wobbly::Vector (FirstPositionX - 10.0f,
+                                     FirstPositionY - 10.0f));
         wobbly::Vector expectedForce (ForceForSpring (first.position,
                                                       second.position,
                                                       desiredDistance));
@@ -189,10 +187,10 @@ namespace
 
     TEST_F (Springs, ForceAppliedToSecondObjectProportionalToNegativeDistanceSK)
     {
-        bg::assign (first.position, wobbly::Vector (FirstPositionX - 10.0f,
-                                                    FirstPositionY - 10.0f));
+        wgd::assign (first.position, wobbly::Vector (FirstPositionX - 10.0f,
+                                                     FirstPositionY - 10.0f));
         wobbly::Vector negativeDistance (desiredDistance);
-        bg::multiply_value (negativeDistance, -1.0f);
+        wgd::scale (negativeDistance, -1.0f);
 
         wobbly::Vector expectedForce (ForceForSpring (second.position,
                                                       first.position,
@@ -205,16 +203,16 @@ namespace
 
     TEST_F (Springs, ForceAccumulatesWithApplications)
     {
-        bg::assign (first.position,
-                    wobbly::Vector (FirstPositionX - 10.0f,
-                                    FirstPositionY - 10.0f));
+        wgd::assign (first.position,
+                     wobbly::Vector (FirstPositionX - 10.0f,
+                                     FirstPositionY - 10.0f));
         wobbly::Vector expectedForce (ForceForSpring (first.position,
                                                       second.position,
                                                       desiredDistance));
 
         /* Scalar for single spring */
         unsigned int const nApplications = 3;
-        bg::multiply_value (expectedForce, nApplications);
+        wgd::scale (expectedForce, nApplications);
 
         for (unsigned int i = 0; i < nApplications; ++i)
             spring.ApplyForces (SpringConstant);
@@ -226,18 +224,18 @@ namespace
     {
         std::function <double (int)> forceByDistanceFunction =
             [this](int delta) -> double {
-                bg::assign (first.force, wobbly::Vector (0, 0));
-                bg::assign (second.force, wobbly::Vector (0, 0));
-                bg::assign (first.position,
-                            wobbly::Vector (FirstPositionX - delta,
-                                            FirstPositionY));
-                bg::assign (second.position,
-                            wobbly::Vector (SecondPositionX + delta,
-                                            SecondPositionY));
+                wgd::assign (first.force, wobbly::Vector (0, 0));
+                wgd::assign (second.force, wobbly::Vector (0, 0));
+                wgd::assign (first.position,
+                             wobbly::Vector (FirstPositionX - delta,
+                                             FirstPositionY));
+                wgd::assign (second.position,
+                             wobbly::Vector (SecondPositionX + delta,
+                                             SecondPositionY));
 
                 spring.ApplyForces (SpringConstant);
 
-                return bg::get <0> (first.force);
+                return wgd::get <0> (first.force);
             };
 
         EXPECT_THAT (forceByDistanceFunction,
@@ -249,8 +247,8 @@ namespace
         double const justBelowThreshold = FirstPositionX -
                                           wobbly::Spring::ClipThreshold * 1.1;
 
-        bg::assign (first.position,
-                    wobbly::Vector (justBelowThreshold, FirstPositionY));
+        wgd::assign (first.position,
+                     wobbly::Vector (justBelowThreshold, FirstPositionY));
         spring.ApplyForces (SpringConstant);
 
         EXPECT_THAT (first.force, Eq (wobbly::Vector (0, 0)));
@@ -261,8 +259,9 @@ namespace
         /* Change the position of one object, that will cause forces
          * to be exerted
          */
-        bg::assign (first.position, wobbly::Vector (FirstPositionX - 10,
-                                                    FirstPositionY));
+        wgd::assign (first.position,
+                     wobbly::Vector (FirstPositionX - 10,
+                                     FirstPositionY));
 
         EXPECT_TRUE (spring.ApplyForces (SpringConstant));
     }
@@ -287,11 +286,11 @@ namespace
         /* Calculate distance between first and second, then adjust
          * second object's position to be distance * scaleFactor */
         wobbly::Vector distance;
-        bg::assign (distance, second.position);
-        bg::subtract_point (distance, first.position);
-        bg::subtract_point (second.position, distance);
-        bg::multiply_value (distance, SpringScaleFactor);
-        bg::add_point (second.position, distance);
+        wgd::assign (distance, second.position);
+        wgd::pointwise_subtract (distance, first.position);
+        wgd::pointwise_subtract (second.position, distance);
+        wgd::scale (distance, SpringScaleFactor);
+        wgd::pointwise_add (second.position, distance);
 
         spring.ScaleLength (wobbly::Vector (SpringScaleFactor,
                                             SpringScaleFactor));

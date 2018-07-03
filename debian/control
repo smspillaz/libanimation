@@ -4,12 +4,7 @@ Maintainer: Sam Spilsbury <sam@endlessm.com>
 Build-Depends: debhelper (>= 8.0.0),
                cdbs,
                cmake,
-               git,
-               libboost1.54-dev |
-               libboost1.53-dev |
-               libboost1.49-dev |
-               libboost1.46-dev |
-               libboost-dev
+               git
 Standards-Version: 3.9.4
 Section: libs
 Vcs-Git: git://github.com/smspillaz/libwobbly.git
@@ -18,11 +13,6 @@ Package: libwobbly-dev
 Section: libdevel
 Architecture: any
 Depends: libwobbly0 (= ${binary:Version}),
-         libboost1.54-dev |
-         libboost1.53-dev |
-         libboost1.49-dev |
-         libboost1.46-dev |
-         libboost-dev
 Description: Wobbly Mesh Library
  Wobbly Mesh
 

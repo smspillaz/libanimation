@@ -13,8 +13,6 @@
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
 
-#include <boost/test/utils/wrap_stringstream.hpp>  // for operator<<
-
 #include <gmock/gmock-matchers.h>       // for Matcher, ElementsAreArray, etc
 #include <gmock/gmock.h>                // IWYU pragma: keep
 #include <gtest/gtest-param-test.h>     // for Values, Combine, ValuesIn, etc
@@ -36,10 +34,10 @@ using ::testing::WithParamInterface;
 
 using ::wobbly::matchers::Eq;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     double TileWidth (double width)
     {
         return width / (wobbly::config::Width - 1);
@@ -66,8 +64,9 @@ namespace
             {
                 wobbly::PointView <double> pv (positions,
                                                i * meshWidth + j);
-                bg::assign_point (pv, wobbly::Point (tileWidth * j,
-                                                     tileHeight * i));
+                wgd::assign (pv,
+                             wobbly::Point (tileWidth * j,
+                                            tileHeight * i));
             }
         }
     }
@@ -127,7 +126,7 @@ namespace
     {
         auto handleOwner (targets.Activate ());
         wobbly::PointView <double> pv (positions, 1);
-        bg::add_point (pv, wobbly::Point (range * 2, range * 2));
+        wgd::pointwise_add (pv, wobbly::Point (range * 2, range * 2));
 
         EXPECT_TRUE (constrainment (positions, anchors));
     }
@@ -138,7 +137,7 @@ namespace
         wobbly::PointView <double> pv (positions, 1);
 
         /* Not enough to cause constrainment */
-        bg::add_point (pv, wobbly::Point (range / 2, 0));
+        wgd::pointwise_add (pv, wobbly::Point (range / 2, 0));
 
         EXPECT_FALSE (constrainment (positions, anchors));
     }
@@ -166,7 +165,7 @@ namespace
         for (size_t i = 0; i < positions.size () / 2; ++i)
         {
             wobbly::PointView <double> pv (expectedPositions, i);
-            bg::add_point (pv, wobbly::Point (range, 0));
+            wgd::pointwise_add (pv, wobbly::Point (range, 0));
         }
 
         std::vector <Matcher <double>> matchers;
@@ -210,12 +209,12 @@ namespace
         wobbly::PointView <double> pv (positions, index);
         wobbly::Point expected;
 
-        bg::add_point (pv,
-                       wobbly::Point (radiusInRange * ratio,
-                                      radiusInRange * (1 - absratio) * sign));
+        wgd::pointwise_add (pv,
+                            wobbly::Point (radiusInRange * ratio,
+                                           radiusInRange * (1 - absratio) * sign));
 
         /* Expected point is the modified point here, before constrainment */
-        bg::assign (expected, pv);
+        wgd::pointwise_add (expected, pv);
 
         constrainment (positions, anchors);
 
@@ -239,10 +238,10 @@ namespace
         wobbly::Point expected;
 
         /* Expected point is the actual grid point, but at its maximum range */
-        bg::assign (expected, pv);
-        bg::add_point (expected, inRange);
+        wgd::assign (expected, pv);
+        wgd::pointwise_add (expected, inRange);
 
-        bg::add_point (pv, outOfRange);
+        wgd::pointwise_add (pv, outOfRange);
         constrainment (positions, anchors);
 
         EXPECT_THAT (pv, Eq (expected));
@@ -255,9 +254,9 @@ namespace
         for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
         {
             wobbly::PointView <double> p (array, i);
-            bg::subtract_point (p, origin);
-            bg::multiply_point (p, scaleFactor);
-            bg::add_point (p, origin);
+            wgd::pointwise_subtract (p, origin);
+            wgd::pointwise_scale (p, scaleFactor);
+            wgd::pointwise_add (p, origin);
         }
     }
 
@@ -276,7 +275,7 @@ namespace
         wobbly::Point expected;
 
         /* Expected point is the same point here, before constrainment */
-        bg::assign (expected, pv);
+        wgd::assign (expected, pv);
 
         constrainment (positions, anchors);
 
@@ -295,7 +294,7 @@ namespace
         wobbly::Point expected;
 
         /* Not expecting the same point before constrainment */
-        bg::assign (expected, pv);
+        wgd::assign (expected, pv);
 
         constrainment (positions, anchors);
 

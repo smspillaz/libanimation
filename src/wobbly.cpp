@@ -66,11 +66,14 @@
 
 #include <experimental/optional>        // for optional
 
-#include <wobbly/wobbly.h>    // for PointView, Model, Point, etc
+#include <wobbly/geometry.h>                   // for PointView, PointModel, etc
+#include <wobbly/geometry_traits.h>            // for assign, scale, etc
+#include <wobbly/wobbly.h>              // for Model, etc
 
 #include "wobbly_internal.h"            // for Spring, MeshArray, etc
 
-namespace bg = boost::geometry;
+namespace wg = ::wobbly::geometry;
+namespace wgd = ::wobbly::geometry::dimension;
 
 void
 wobbly::Anchor::MovableAnchorDeleter::operator () (MovableAnchor *anchor)
@@ -213,7 +216,7 @@ wobbly::Spring::~Spring ()
 void
 wobbly::Spring::ScaleLength (Vector scaleFactor)
 {
-    bg::multiply_point (desiredDistance, scaleFactor);
+    wgd::pointwise_scale (desiredDistance, scaleFactor);
 }
 
 namespace
@@ -226,8 +229,8 @@ namespace
         using namespace wobbly;
         std::vector <Spring> springs;
 
-        double const springWidth = ::bg::get <0> (springDimensions);
-        double const springHeight = ::bg::get <1> (springDimensions);
+        double const springWidth = wgd::get <0> (springDimensions);
+        double const springHeight = wgd::get <1> (springDimensions);
 
         size_t const nSprings = SpringCountForGridSize (config::Width,
                                                         config::Height);
@@ -302,7 +305,7 @@ namespace
 
         vector.Each ([&](Spring const &spring) {
             double currentSpringPrimaryDistance =
-                ::bg::distance (spring.FirstPosition (), install);
+                wgd::distance (spring.FirstPosition (), install);
             if (currentSpringPrimaryDistance < primaryDistance)
             {
                 primaryDistance = currentSpringPrimaryDistance;
@@ -315,7 +318,7 @@ namespace
             if (currentSpringPrimaryDistance == primaryDistance)
             {
                 double currentSpringSecondaryDistance =
-                    ::bg::distance (spring.SecondPosition (), install);
+                    wgd::distance (spring.SecondPosition (), install);
                 if (currentSpringSecondaryDistance < secondaryDistance)
                 {
                     found = &spring;
@@ -344,7 +347,7 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
     std::unique_ptr <double[]> data (new double[4]);
     std::fill_n (data.get (), 4, 0);
     wobbly::PointView <double> anchorView (data.get (), 0);
-    bg::assign (anchorView, install);
+    wgd::assign (anchorView, install);
 
     /* We always want the spring to *read* the first and second
      * positions, although the positions for the purpose of
@@ -368,8 +371,8 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
             PointView <double> anchorForce (data.get (), 1);
 
             Vector delta;
-            bg::assign_point (delta, desiredPoint);
-            bg::subtract_point (delta, anchorPoint);
+            wgd::assign (delta, desiredPoint);
+            wgd::pointwise_subtract (delta, anchorPoint);
 
             return mSprings.EmplaceAndTrack (std::move (anchorForce),
                                              std::move (meshForce),
@@ -579,14 +582,14 @@ namespace
                                                 wobbly::Vector const &tileSize)
     {
         wobbly::Point start;
-        bg::assign_point (start, anchor);
+        wgd::assign (start, anchor);
 
         size_t const row = index % wobbly::config::Width;
         size_t const column = index / wobbly::config::Width;
 
-        wobbly::Point deltaToTopLeft (bg::get <0> (tileSize) * row,
-                                      bg::get <1> (tileSize) * column);
-        bg::subtract_point (start, deltaToTopLeft);
+        wobbly::Point deltaToTopLeft (wgd::get <0> (tileSize) * row,
+                                      wgd::get <1> (tileSize) * column);
+        wgd::pointwise_subtract (start, deltaToTopLeft);
 
         return start;
     }
@@ -604,7 +607,7 @@ wobbly::Model::Private::TargetPosition () const
      * the target position by reference to it */
     auto early = mTargets.PerformIfActive ([](MeshArray const &targets) {
         wobbly::Point constructed;
-        bg::assign (constructed, wobbly::PointView <double const> (targets, 0));
+        wgd::assign (constructed, wobbly::PointView <double const> (targets, 0));
         return std::make_tuple (true, constructed);
     });
 
@@ -625,8 +628,7 @@ wobbly::Model::Private::TargetPosition () const
 
     /* Model will be settled, return the top left point */
     wobbly::Point result;
-    bg::assign_point (result, wobbly::PointView <double const> (points,
-                                                                        0));
+    wgd::assign (result, wobbly::PointView <double const> (points, 0));
 
     return result;
 }
@@ -690,7 +692,7 @@ namespace
             void MoveBy (wobbly::Point const &delta) noexcept
             {
                 wobbly::PointView <double> pv (data.get (), 0);
-                bg::add_point (pv, delta);
+                wgd::pointwise_add (pv, delta);
             }
 
         private:
@@ -737,7 +739,7 @@ namespace
                     /* We can't return a PointView direclty since it isn't
                      * default-constructible, but we can return a tuple
                      * with its arguments */
-                    if (::bg::equals ((spring.*fetch) (), position))
+                    if (wgd::equals ((spring.*fetch) (), position))
                         return std::make_tuple (targets.data (), i);
                 }
 
@@ -824,7 +826,7 @@ namespace
 
             void MoveBy (wobbly::Point const &delta) noexcept
             {
-                bg::add_point (position, delta);
+                wgd::pointwise_add (position, delta);
             }
 
         private:
@@ -902,8 +904,8 @@ wobbly::Model::MoveModelBy (Point const &delta)
     {
         PointView <double> pointView (points, i);
         PointView <double> targetView (estimated, i);
-        bg::add_point (pointView, delta);
-        bg::add_point (targetView, delta);
+        wgd::pointwise_add (pointView, delta);
+        wgd::pointwise_add (targetView, delta);
     }
 
     /* Also move any inserted springs */
@@ -921,7 +923,7 @@ wobbly::Model::MoveModelTo (Point const &point)
     auto const &target (priv->TargetPosition ());
 
     Vector delta (point);
-    bg::subtract_point (delta, target);
+    wgd::pointwise_subtract (delta, target);
 
     MoveModelBy (delta);
 }
@@ -937,7 +939,7 @@ wobbly::Model::ResizeModel (double width, double height)
     wobbly::Vector const scaleFactor (width / priv->mWidth,
                                       height / priv->mHeight);
 
-    if (bg::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
+    if (wgd::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
         return;
 
     /* Then on each point, implement a transformation
@@ -949,15 +951,15 @@ wobbly::Model::ResizeModel (double width, double height)
     wobbly::Point const positionsOrigin (priv->TargetPosition ());
     wobbly::Point const targetsOrigin = [&targets]() {
         wobbly::Point target;
-        bg::assign (target, wobbly::PointView <double const> (targets, 0));
+        wgd::assign (target, wobbly::PointView <double const> (targets, 0));
         return target;
     } ();
 
     auto const rescale =
         [&scaleFactor](Point const &origin, PointView <double> &&p) {
-            bg::subtract_point (p, origin);
-            bg::multiply_point (p, scaleFactor);
-            bg::add_point (p, origin);
+            wgd::pointwise_subtract (p, origin);
+            wgd::pointwise_scale (p, scaleFactor);
+            wgd::pointwise_add (p, origin);
         };
 
     /* Rescale all points and targets */
@@ -1005,15 +1007,15 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
             double const maximumRange = threshold;
 
             wobbly::PointView <double> point (points, i);
-            double range = bg::distance (target, point);
+            double range = wgd::distance (target, point);
 
             if (range < maximumRange)
                 continue;
 
             ret |= true;
 
-            auto sin = (bg::get <1> (target) - bg::get <1> (point)) / range;
-            auto cos = (bg::get <0> (target) - bg::get <0> (point)) / range;
+            auto sin = (wgd::get <1> (target) - wgd::get <1> (point)) / range;
+            auto cos = (wgd::get <0> (target) - wgd::get <0> (point)) / range;
 
             /* Now we want to vectorize range and
              * find our new x and y offsets */
@@ -1022,8 +1024,8 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
                                     newRange * sin);
 
             /* Offset from the "target" position */
-            bg::assign_point (point, target);
-            bg::subtract_point (point, newDelta);
+            wgd::assign (point, target);
+            wgd::pointwise_subtract (point, newDelta);
         }
 
         return ret;
@@ -1102,7 +1104,7 @@ wobbly::TargetMesh::Activate () noexcept (true)
             for (size_t i = 0; i < config::TotalIndices; ++i)
             {
                 PointView <double> pv (mPoints, i);
-                bg::add_point (pv, delta);
+                wgd::pointwise_add (pv, delta);
             }
         }
     };
@@ -1124,21 +1126,12 @@ wobbly::BezierMesh::~BezierMesh ()
 
 namespace
 {
-    class PointRoundOperation
-    {
-        public:
-
-            template <typename P, int I>
-            void apply (P &p) const
-            {
-                bg::set <I> (p, std::round (bg::get <I> (p)));
-            }
-    };
-
     template <typename Point>
     void PointRound (Point &point)
     {
-        bg::for_each_coordinate (point, PointRoundOperation ());
+        wgd::for_each_coordinate (point, [](auto const &c) {
+            return std::round (c);
+        });
     }
 
     template <typename Numeric>
@@ -1154,8 +1147,8 @@ namespace
                        Numeric                                   y,
                        typename NumericTraits <Numeric>::Chooser yFinder)
     {
-        bg::set <0> (p, xFinder (bg::get <0> (p), x));
-        bg::set <1> (p, yFinder (bg::get <1> (p), y));
+        wgd::set <0> (p, xFinder (wgd::get <0> (p), x));
+        wgd::set <1> (p, yFinder (wgd::get <1> (p), y));
 
         /* Round to next integer */
         PointRound (p);
