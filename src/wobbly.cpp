@@ -64,7 +64,7 @@
 #include <type_traits>                  // for move, etc
 #include <vector>                       // for vector
 
-#include <boost/optional/optional.hpp>
+#include <experimental/optional>        // for optional
 
 #include <wobbly/wobbly.h>    // for PointView, Model, Point, etc
 
@@ -296,7 +296,7 @@ namespace
     {
         using namespace wobbly;
 
-        boost::optional <wobbly::Spring const &> found;
+        wobbly::Spring const *found = nullptr;
         double primaryDistance = std::numeric_limits <double>::max ();
         double secondaryDistance = std::numeric_limits <double>::max ();
 
@@ -307,7 +307,7 @@ namespace
             {
                 primaryDistance = currentSpringPrimaryDistance;
                 secondaryDistance = std::numeric_limits <double>::max ();
-                found = spring;
+                found = &spring;
             }
 
             /* Branch will be taken for any match of spring with
@@ -318,7 +318,7 @@ namespace
                     ::bg::distance (spring.SecondPosition (), install);
                 if (currentSpringSecondaryDistance < secondaryDistance)
                 {
-                    found = spring;
+                    found = &spring;
 
                     /* This variable is used again on the next iteration
                      * of the loop, but cppcheck can't see through the
@@ -329,8 +329,8 @@ namespace
             }
         });
 
-        assert (found.is_initialized ());
-        return found.get ();
+        assert (found != nullptr);
+        return *found;
     }
 }
 
