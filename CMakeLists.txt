@@ -55,7 +55,7 @@ endif ()
 # Don't include PolysquareCommon until we've at least updated submodules
 include ("cmake/common/PolysquareCommon")
 
-psq_compiler_bootstrap ()
+psq_compiler_bootstrap (STANDARD c++17)
 psq_sanitizers_bootstrap ()
 psq_rules_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH} ${CMAKE_BINARY_DIR})
 psq_gmock_bootstrap (${LIBWOBBLY_POLYSQUARE_CMAKE_MODULE_PATH})
