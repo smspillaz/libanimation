@@ -1,5 +1,5 @@
 /*
- * src/wobbly.cpp
+ * wobbly/wobbly.cpp
  *
  * A spring model for implementing "wobbly" textures.
  *
@@ -66,9 +66,9 @@
 
 #include <experimental/optional>        // for optional
 
-#include <wobbly/geometry.h>                   // for PointView, PointModel, etc
-#include <wobbly/geometry_traits.h>            // for assign, scale, etc
-#include <wobbly/wobbly.h>              // for Model, etc
+#include <geometry.h>                   // for PointView, PointModel, etc
+#include <geometry_traits.h>            // for assign, scale, etc
+#include <wobbly.h>              // for Model, etc
 
 #include "wobbly_internal.h"            // for Spring, MeshArray, etc
 

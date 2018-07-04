@@ -1,5 +1,5 @@
 /*
- * src/geometry_traits.h
+ * wobbly/geometry_traits.h
  *
  * Provides geometric trait mutation functions
  *

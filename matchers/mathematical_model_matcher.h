@@ -499,8 +499,6 @@ namespace wobbly
                 static inline bool compare (LHS const &lhs, RHS const &rhs)
                 {
                     typedef wgd::Dimension <LHS> DimLHS;
-                    typedef wgd::Dimension <RHS> DimRHS;
-
                     typedef Equal <LHS, RHS, 0, DimLHS::dimensions> Comparator;
 
                     return Comparator::apply (lhs, rhs);

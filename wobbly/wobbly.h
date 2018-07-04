@@ -1,5 +1,5 @@
 /*
- * include/wobbly.h
+ * wobbly/wobbly.h
  *
  * C++ Interface for "wobbly" textures
  *

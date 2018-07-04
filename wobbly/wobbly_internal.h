@@ -31,7 +31,7 @@
 /* boost::optional supports references in optional <T> while xstd::optional
  * does not. xstd::optional supports move semantics. Use the latter unless
  * there is a usecase for the former */
-#include <third_party/allow_move_optional/optional.hpp>  // for optional
+#include "third_party/allow_move_optional/optional.hpp"  // for optional
 
 #include <wobbly/geometry.h>                   // for PointView, PointModel, etc
 #include <wobbly/geometry_traits.h>            // for assign, scale, etc

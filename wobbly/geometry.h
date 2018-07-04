@@ -1,5 +1,5 @@
 /*
- * src/geometry.h
+ * wobbly/geometry.h
  *
  * Provides geometric types and trait overloads
  * for 2D points and boxes.

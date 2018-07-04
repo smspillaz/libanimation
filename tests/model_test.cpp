@@ -27,8 +27,7 @@
 #include <gtest/gtest.h>                // for AssertHelper, etc
 
 #include <wobbly/wobbly.h>    // for Point, PointView, Vector, etc
-
-#include <wobbly_internal.h>            // for MeshArray, SpringMesh, etc
+#include <wobbly/wobbly_internal.h>            // for MeshArray, SpringMesh, etc
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <ostream_point_operator.h>     // for operator<<

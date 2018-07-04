@@ -18,8 +18,7 @@
 #include <gtest/gtest.h>                // for AssertHelper, TEST_F, etc
 
 #include <wobbly/wobbly.h>    // for PointView, Point, Vector
-
-#include <wobbly_internal.h>            // for EulerIntegrate
+#include <wobbly/wobbly_internal.h>            // for EulerIntegrate
 
 #include <mathematical_model_matcher.h>  // for SatisfiesModel, Linear, etc
 
