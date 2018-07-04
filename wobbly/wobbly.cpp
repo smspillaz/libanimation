@@ -858,7 +858,7 @@ namespace
 }
 
 wobbly::Anchor
-wobbly::Model::GrabAnchor (Point const &position) throw (std::runtime_error)
+wobbly::Model::GrabAnchor (Point const &position) noexcept (false)
 {
     auto &points = priv->mPositions.PointArray ();
     size_t index = mesh::ClosestIndexToPosition (points, position);
@@ -877,7 +877,7 @@ wobbly::Model::GrabAnchor (Point const &position) throw (std::runtime_error)
 }
 
 wobbly::Anchor
-wobbly::Model::InsertAnchor (Point const &position) throw (std::runtime_error)
+wobbly::Model::InsertAnchor (Point const &position) noexcept (false)
 {
     auto &points = priv->mPositions.PointArray ();
 

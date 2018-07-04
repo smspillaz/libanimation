@@ -115,7 +115,7 @@ namespace wobbly
              * will effectively cause force to be exerted on all the other
              * points. */
             wobbly::Anchor
-            GrabAnchor (Point const &grab) throw (std::runtime_error);
+            GrabAnchor (Point const &grab) noexcept (false);
 
             /* This function will insert a new point in the spring
              * mesh which is immobile, with springs from it to its
@@ -126,7 +126,7 @@ namespace wobbly
              * effectively cause force to be exerted on all other non-immobile
              * points in the mesh */
             wobbly::Anchor
-            InsertAnchor (Point const &grab) throw (std::runtime_error);
+            InsertAnchor (Point const &grab) noexcept (false);
 
             /* Performs a single integration per 16 ms in millisecondsDelta */
             bool Step (unsigned int millisecondsDelta);
