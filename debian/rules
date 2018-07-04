@@ -6,17 +6,18 @@
 # dh-make output file, you may use that output file without restriction.
 # This special exception was added by Craig Small in version 0.37 of dh-make.
 
-# There's a bug in older versions of g++ which causes this warning to be
-# triggered for any usage of boost::optional.
-#
-# See: http://gcc.gnu.org/bugzilla/show_bug.cgi?id=47679
-CFLAGS += -Wno-error=maybe-uninitialized
-CXXFLAGS += -Wno-error=maybe-uninitialized
+%:
+	dh $@ --buildsystem=meson
 
-include /usr/share/cdbs/1/rules/debhelper.mk
-include /usr/share/cdbs/1/class/cmake.mk
-
-DEB_CMAKE_NORMAL_ARGS += -DWOBBLY_ENABLE_ANALYSIS=OFF -DWOBBLY_UPDATE_SUBMODULES=ON -DPOLYSQUARE_USE_PRECOMPILED_HEADERS=OFF -DPOLYSQUARE_BUILD_TESTS=OFF
-
-# Uncomment this to turn on verbose mode.
-#export DH_VERBOSE
+override_dh_auto_configure:
+	rm -rf obj-${DEB_HOST_MULTIARCH} && \
+	mkdir -p obj-${DEB_HOST_MULTIARCH} && \
+	cd obj-${DEB_HOST_MULTIARCH} && \
+	LC_ALL=C.UTF-8 meson \
+	 .. \
+	 --buildtype=plain \
+	 --prefix=/usr \
+	 --sysconfdir=/etc \
+	 --localstatedir=/var \
+	 --libdir=lib/${DEB_HOST_MULTIARCH} \
+	 --libexecdir=lib/${DEB_HOST_MULTIARCH}
