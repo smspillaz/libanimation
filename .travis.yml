@@ -1,65 +1,14 @@
+sudo: false
 language: cpp
-cache: apt
-env:
- # GNU C/C++ Build
- - CC_OVERLOAD=gcc
-   CXX_OVERLOAD=g++
-   CMAKE_OPTIONS="`cat .ci-libwobbly-sanitization-options`"
- # Clang Build
- - CC_OVERLOAD=clang-3.8
-   CXX_OVERLOAD=clang++-3.8
-   CMAKE_OPTIONS="`cat .ci-libwobbly-sanitization-options`"
- # Analysis Build
- - CC_OVERLOAD=clang-3.8
-   CXX_OVERLOAD=clang++-3.8
-   CMAKE_OPTIONS="`cat .ci-libwobbly-analysis-options`"
- # GCov Coverage Build
- - CC_OVERLOAD=gcc
-   CXX_OVERLOAD=g++
-   CMAKE_OPTIONS="`cat .ci-libwobbly-coverage-options`"
-   COVERAGE=1
- # Package Build
- - DEBIAN_BUILD=1
+services:
+  - docker
 before_install:
-  - git submodule update --init --recursive
-  - sudo apt-add-repository -y ppa:smspillaz/verapp-latest
-  - sudo apt-add-repository -y ppa:boost-latest/ppa
-  - sudo add-apt-repository -y ppa:smspillaz/cmake-master # CMake
-  - sudo apt-add-repository -y ppa:ubuntu-toolchain-r/test
-  - echo deb http://llvm.org/apt/precise/ llvm-toolchain-precise-3.8 main | sudo tee --append /etc/apt/sources.list
-  - echo deb-src http://llvm.org/apt/precise/ llvm-toolchain-precise-3.8 main | sudo tee --append /etc/apt/sources.list
-  - sudo apt-get update
-  - sudo apt-get install -fy --force-yes `cat DEPENDENCIES`
-  - sudo ln -s /usr/bin/clang-tidy-3.8 /usr/bin/clang-tidy
-  - yes | sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 50
-  - yes | sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 50
-  - yes | sudo update-alternatives --install /usr/bin/gcov gcov /usr/bin/gcov-4.8 50
-  - if [[ $COVERAGE == 1 ]] ; then sudo pip install cpp-coveralls; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker pull ubuntu:bionic; fi
 script:
-  - if [[ $DEBIAN_BUILD == 1 ]] ; then
-      debuild -i -us -uc -b;
-    else
-      mkdir build &&
-      pushd build &&
-      export CC=${CC_OVERLOAD} &&
-      export CXX=${CXX_OVERLOAD} &&
-      if [[ $SCAN_BUILD == 1 ]] ; then
-        scan-build cmake .. `echo ${CMAKE_OPTIONS}` &&
-        scan-build --use-cc=clang-3.8 --use-c++=clang++-3.8 make;
-      else
-        cmake .. `echo ${CMAKE_OPTIONS}` -DCMAKE_VERBOSE_MAKEFILE=ON && make;
-      fi &&
-      ./tests/windowfx_wobbly_unit_tests &&
-      if [ -e ./tests/windowfx_wobbly_unit_tests_asan ] ; then
-        ./tests/windowfx_wobbly_unit_tests_asan;
-      fi &&
-      if [ -e ./tests/windowfx_wobbly_unit_tests_ubsan ] ; then
-        ./tests/windowfx_wobbly_unit_tests_ubsan;
-      fi &&
-      popd;
-    fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo FROM ubuntu:bionic > Dockerfile; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo ADD . /root >> Dockerfile; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo RUN apt-get update >> Dockerfile; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo RUN apt-get install -y meson ninja-build build-essential git >> Dockerfile; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker build -t withgit .; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker run withgit /bin/sh -c "cd /root && TRAVIS=true CC=$CC CXX=$CXX meson -Db_sanitize=address,undefined -Dwerror=true builddir && ninja -C builddir && ./builddir/tests/windowfx_wobbly_test --gtest_color=yes"; fi
 
-after_success:
- - if [[ $COVERAGE == 1 ]] ; then
-     coveralls -E "(^.*\/libwobbly\/build\/.*$)" -E "(^.*\/libwobbly/\include\/.*$)";
-   fi
