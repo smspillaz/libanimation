@@ -302,7 +302,6 @@ namespace
                               << candidate << ")" << " with delta ("
                               << delta << ") is " << distTanTheta;
 
-                typedef decltype (vecTanTheta) NumericType;
                 return wobbly::testing::close_at_tolerance (vecTanTheta, distTanTheta, 10e-7);
             }
 
