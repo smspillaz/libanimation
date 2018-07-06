@@ -7,6 +7,7 @@
 wobbly_test_sources = [
   'anchor_test.cpp',
   'constrainment_test.cpp',
+  'glib_api_test.cpp',
   'euler_integration_test.cpp',
   'mesh_interpolation_test.cpp',
   'model_test.cpp',
@@ -15,6 +16,9 @@ wobbly_test_sources = [
   'spring_test.cpp'
 ]
 
+glib = dependency('glib-2.0')
+gobject = dependency('gobject-2.0')
+
 wobbly_test_executable = executable(
   'windowfx_wobbly_test',
   wobbly_test_sources,
@@ -22,9 +26,12 @@ wobbly_test_executable = executable(
     gtest_project.get_variable('gtest_main_dep'),
     gtest_project.get_variable('gtest_dep'),
     gtest_project.get_variable('gmock_dep'),
+    glib,
+    gobject,
     mathematical_model_matcher_dep,
     within_geometry_matcher_dep,
-    wobbly_dep
+    wobbly_dep,
+    wobbly_glib_dep
   ]
 )
 
