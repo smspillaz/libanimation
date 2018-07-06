@@ -31,6 +31,7 @@
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <ostream_point_operator.h>     // for operator<<
+#include <within_geometry_matcher.h>
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -49,6 +50,7 @@ using ::testing::WithParamInterface;
 
 using ::wobbly::matchers::Eq;
 using ::wobbly::matchers::SatisfiesModel;
+using ::wobbly::matchers::WithinGeometry;
 
 using ::wobbly::models::Parabolic;
 
@@ -1009,58 +1011,6 @@ namespace
 
         EXPECT_FALSE (this->model.Step (1));
     }
-
-    template <typename ParentGeometry>
-    class WithinGeometryMatcher
-    {
-        public:
-
-            WithinGeometryMatcher (ParentGeometry const &parent) :
-                parent (parent)
-            {
-            }
-
-            template <typename ChildGeometry>
-            bool MatchAndExplain (ChildGeometry const &child,
-                                  MatchResultListener *listener) const
-            {
-                return parent.contains (child);
-            }
-
-            void DescribeTo (std::ostream *os) const
-            {
-                *os << "is";
-                Describe (*os);
-            }
-
-            void DescribeNegationTo (std::ostream *os) const
-            {
-                *os << "is not";
-                Describe (*os);
-            }
-
-        private:
-
-            void Describe (std::ostream &os) const
-            {
-                os << " within :" << std::endl;
-                wgd::for_each_point (parent, [&os](auto const &p) {
-                    os << " - " << p << std::endl;
-                });
-            }
-
-            ParentGeometry parent;
-    };
-
-    template <typename ParentGeometry>
-    inline PolymorphicMatcher <WithinGeometryMatcher <ParentGeometry> >
-    WithinGeometry (ParentGeometry const &parent)
-    {
-        WithinGeometryMatcher <ParentGeometry> matcher (parent);
-        return MakePolymorphicMatcher (matcher);
-    }
-
-    typedef wobbly::Box <wobbly::Point> PointBox;
 
     TYPED_TEST (SpringBezierModelAnchorStrategy, EntireModelMovesWhileGrabbed)
     {

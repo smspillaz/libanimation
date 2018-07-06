@@ -23,6 +23,7 @@ wobbly_test_executable = executable(
     gtest_project.get_variable('gtest_dep'),
     gtest_project.get_variable('gmock_dep'),
     mathematical_model_matcher_dep,
+    within_geometry_matcher_dep,
     wobbly_dep
   ]
 )
