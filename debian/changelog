@@ -1,3 +1,11 @@
+libwobbly (0.3.1) eos; urgency=medium
+
+  * wobbly-glib: Add wobbly-glib library
+  * debian/control
+     - Add packaging for wobbly-glib0, wobbly-glib-dev, gir1.2-wobbly-glib
+
+ -- Sam Spilsbury <sam@endlessm.com>  Sat, 07 Jul 2018 02:26:53 +0800
+
 libwobbly (0.3.0) eos; urgency=medium
 
   * build: Port to Meson
