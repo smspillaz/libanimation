@@ -424,6 +424,10 @@ namespace wobbly
             std::array <wobbly::Point, 4> const
             Extremes () const;
 
+            template <typename... Args>
+            wobbly::Point
+            TargetPositionByFullIntegration (Args&& ...additionalSteps) const;
+
             wobbly::Point
             TargetPosition () const;
 
@@ -463,7 +467,15 @@ wobbly::Model::Private::Private (Point    const &initialPosition,
     mWidth (width),
     mHeight (height),
     mTargets ([this](MeshArray &mesh) {
-                  auto target (TargetPosition ());
+                  /* Use a full integration to compute the target position
+                   * in case the anchor count ever drops to 1 - we don't
+                   * want to short-circuit our own computation by just
+                   * returning the existing targets array.
+                   *
+                   * Note that we do not pass the constrainment step here -
+                   * the constrainment step uses the targets, which we're
+                   * trying to compute. */
+                  auto target (TargetPositionByFullIntegration ());
                   mesh::CalculatePositionArray (target,
                                                 mesh,
                                                 TileSize ());
@@ -595,14 +607,40 @@ namespace
     }
 }
 
+template <typename... Args>
 wobbly::Point
-wobbly::Model::Private::TargetPosition () const
+wobbly::Model::Private::TargetPositionByFullIntegration (Args&& ...additionalSteps) const
 {
     wobbly::Vector const tileSize (TileSize ());
 
     auto points (mPositions.PointArray ());
     auto &anchors (mAnchors);
 
+    /* Make our own copies of the integrators and run the integration on them */
+    EulerIntegration              integrator (mVelocityIntegrator);
+    SpringStep <EulerIntegration> spring (integrator,
+                                          points,
+                                          mSettings.springConstant,
+                                          mSettings.friction,
+                                          tileSize);
+
+    /* Keep on integrating this copy until we know the final position */
+    while (Integrate (points,
+                      anchors,
+                      1,
+                      spring,
+                      std::forward <Args> (additionalSteps)...));
+
+    /* Model will be settled, return the top left point */
+    wobbly::Point result;
+    wgd::assign (result, wobbly::PointView <double const> (points, 0));
+
+    return result;
+}
+
+wobbly::Point
+wobbly::Model::Private::TargetPosition () const
+{
     /* If we have at least one anchor, we can take a short-cut and determine
      * the target position by reference to it */
     auto early = mTargets.PerformIfActive ([](MeshArray const &targets) {
@@ -614,23 +652,9 @@ wobbly::Model::Private::TargetPosition () const
     if (std::get <0> (early))
         return std::get <1> (early);
 
-    /* Make our own copies of the integrators and run the integration on them */
-    EulerIntegration              integrator (mVelocityIntegrator);
-    SpringStep <EulerIntegration> spring (integrator,
-                                          points,
-                                          mSettings.springConstant,
-                                          mSettings.friction,
-                                          tileSize);
-    ConstrainmentStep             constrainment (mConstrainment);
 
-    /* Keep on integrating this copy until we know the final position */
-    while (Integrate (points, anchors, 1, spring, constrainment));
-
-    /* Model will be settled, return the top left point */
-    wobbly::Point result;
-    wgd::assign (result, wobbly::PointView <double const> (points, 0));
-
-    return result;
+    ConstrainmentStep constrainment (mConstrainment);
+    return TargetPositionByFullIntegration (constrainment);
 }
 
 wobbly::Vector
@@ -1095,6 +1119,8 @@ wobbly::TargetMesh::TargetMesh (OriginRecalcStrategy const &origin) :
 wobbly::TargetMesh::Hnd
 wobbly::TargetMesh::Activate () noexcept (true)
 {
+    /* Recompute where all the targets would be if we have
+     * a single anchor. */
     if (++activationCount == 1)
         origin (mPoints);
 
@@ -1111,7 +1137,11 @@ wobbly::TargetMesh::Activate () noexcept (true)
 
     return Hnd (MakeMoveOnly (std::move (moveBy)),
                 [this](MoveOnly <Move> &&handle) {
-                    --activationCount;
+                    /* Anchor count dropped to 1, but the relevant
+                     * anchor could have changed. Recompute where
+                     * all the targets are. */
+                    if (--activationCount == 1)
+                        origin (mPoints);
                 });
 }
 

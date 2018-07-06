@@ -770,7 +770,22 @@ namespace
                      Not (Eq (TextureCenter)));
     }
 
-    typedef std::tuple <wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
+    TEST_F (SpringBezierModel, MovingAnchorWithSecondGrabCausesDeformation)
+    {
+        auto anchor (model.GrabAnchor (wobbly::Point (TextureWidth / 2, 0)));
+
+        {
+            auto secondAnchor (model.GrabAnchor (wobbly::Point (TextureWidth, 0)));
+            anchor.MoveBy (wobbly::Vector (1, 1));
+        }
+
+        auto point (GetTruncatedDeformedCenter (model));
+
+        EXPECT_THAT (point,
+                     Not (Eq (TextureCenter)));
+    }
+
+    typedef std::tuple <wobbly::Point, wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
 
     class SpringBezierModelGrabPositions :
         public SpringBezierModel,
@@ -780,15 +795,19 @@ namespace
 
             SpringBezierModelGrabPositions () :
                 grabPosition (std::get <0> (GetParam ())),
-                movement (std::get <1> (GetParam ())),
-                extremeIndex (std::get <2> (GetParam ()))
+                oppositeGrabPosition (std::get <1> (GetParam ())),
+                movement (std::get <2> (GetParam ())),
+                extremeIndex (std::get <3> (GetParam ()))
             {
             }
 
             wobbly::Point const &grabPosition;
+            wobbly::Point const &oppositeGrabPosition;
             wobbly::Point const &movement;
             size_t              extremeIndex;
     };
+
+    typedef wobbly::Box <wobbly::Point> PointBox;
 
     /* Only tests the GrabIndex strategy */
     TEST_P (SpringBezierModelGrabPositions, GrabsCorrectIndex)
@@ -821,18 +840,48 @@ namespace
                      Eq (wobbly::Point (100, 100)));
     }
 
+    TEST_P (SpringBezierModelGrabPositions, SettlesAfterReleasingSecond)
+    {
+        /* Check that when we grab the model from each of the four corners
+         * and at each corresponding opposite corner, move the first anchor
+         * by 100, 100, then release the second anchor, that the model
+         * always settles at exactly 100, 100
+         *
+         * While exact positioning isn't possible without anchors grabbed,
+         * it is almost always desired in this case */
+        wobbly::Anchor grab (model.GrabAnchor (grabPosition));
+
+        {
+            wobbly::Anchor secondGrab (model.GrabAnchor (oppositeGrabPosition));
+            grab.MoveBy (wobbly::Vector (100, 100));
+        }
+
+        /* Wait for model to settle */
+        while (model.Step (1));
+
+        /* We can't be exact here, since a full integration is required to
+         * compute the target position. */
+        EXPECT_THAT (model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (97.0, 97.0),
+                                               wobbly::Point (103.0, 103.0))));
+    }
+
     SpringGrabParams const springGrabParams[] =
     {
         SpringGrabParams (wobbly::Point (0.0, 0.0),
+                          wobbly::Point (TextureWidth, TextureHeight),
                           wobbly::Point (-1.0, -1.0),
                           0),
         SpringGrabParams (wobbly::Point (TextureWidth, 0.0),
+                          wobbly::Point (0.0, TextureHeight),
                           wobbly::Point (1.0, -1.0),
                           1),
         SpringGrabParams (wobbly::Point (0.0, TextureHeight),
+                          wobbly::Point (TextureWidth, 0.0),
                           wobbly::Point (-1.0, 1.0),
                           2),
         SpringGrabParams (wobbly::Point (TextureWidth, TextureHeight),
+                          wobbly::Point (0.0, 0.0),
                           wobbly::Point (1.0, 1.0),
                           3)
     };
