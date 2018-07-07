@@ -8,7 +8,6 @@
  * Implicitly depends on:
  *  - std::function
  *  - std::array
- *  - boost::geometry
  *
  * See LICENCE.md for Copyright information
  */
@@ -25,10 +24,6 @@
 #include <type_traits>                  // for move, enable_if, etc
 #include <vector>                       // for vector
 
-#include <boost/geometry/algorithms/assign.hpp>  // for assign
-#include <boost/geometry/algorithms/distance.hpp>
-#include <boost/geometry/arithmetic/arithmetic.hpp>  // for add_point, etc
-
 #include <assert.h>                     // for assert
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
@@ -36,21 +31,11 @@
 /* boost::optional supports references in optional <T> while xstd::optional
  * does not. xstd::optional supports move semantics. Use the latter unless
  * there is a usecase for the former */
-#include <third_party/allow_move_optional/optional.hpp>  // for optional
+#include "third_party/allow_move_optional/optional.hpp"  // for optional
 
+#include <wobbly/geometry.h>                   // for PointView, PointModel, etc
+#include <wobbly/geometry_traits.h>            // for assign, scale, etc
 #include <wobbly/wobbly.h>    // for PointView, Vector, Point, etc
-
-namespace boost
-{
-    namespace geometry
-    {
-        namespace concept
-        {
-            template <typename Geometry> class ConstPoint;
-            template <typename Geometry> class Point;
-        }
-    }
-}
 
 namespace wobbly
 {
@@ -77,65 +62,40 @@ namespace wobbly
 
     namespace geometry
     {
-        namespace bg = boost::geometry;
-        namespace bgt = bg::traits;
+        namespace wgd = wobbly::geometry::dimension;
 
         namespace detail
         {
-            template <typename Function>
-            class CoordinateOperationWrapper
-            {
-                public:
-
-                    CoordinateOperationWrapper (Function const &function) :
-                        mFunction (function)
-                    {
-                    }
-
-                    template <typename P, int I>
-                    void apply (P &point) const
-                    {
-                        bg::set <I> (point, mFunction (bg::get <I> (point)));
-                    }
-
-                private:
-
-                    Function const &mFunction;
-            };
-
             template <typename P, typename F>
             inline void CoordinateOperation (P &p, F const &f)
             {
-                CoordinateOperationWrapper <F> const wrapper (f);
-                bg::for_each_coordinate (p, wrapper);
+                wobbly::geometry::dimension::for_each_coordinate (p, f);
             }
         }
 
         template <typename Point>
         inline void ResetIfCloseToZero (Point &p, double t)
         {
-            typedef typename bgt::coordinate_type <Point>::type Component;
-            detail::CoordinateOperation (p,
-                                         [t](Component c) -> Component {
-                                             return std::fabs (c) < t ? 0.0 : c;
-                                         });
+            wgd::for_each_coordinate (p,
+                                      [t](auto const &c) -> decltype(auto) {
+                                          return std::fabs (c) < t ? 0.0 : c;
+                                      });
         }
 
         template <typename Point>
         inline void MakeAbsolute (Point &p)
         {
-            typedef typename bgt::coordinate_type <Point>::type Component;
-            detail::CoordinateOperation (p,
-                                         [](Component c) -> Component {
-                                             return std::fabs (c);
-                                         });
+            wgd::for_each_coordinate (p,
+                                      [](auto const &c) -> decltype(auto) {
+                                          return std::fabs (c);
+                                      });
         }
 
         template <typename Point>
         inline Point Absolute (Point &p)
         {
             Point ret;
-            bg::assign (ret, p);
+            wgd::assign (ret, p);
             MakeAbsolute (ret);
             return ret;
         }
@@ -154,6 +114,8 @@ namespace wobbly
 
     namespace mesh
     {
+        namespace wgd = wobbly::geometry::dimension;
+
         inline void
         CalculatePositionArray (wobbly::Point  const &initialPosition,
                                 wobbly::MeshArray    &array,
@@ -167,10 +129,10 @@ namespace wobbly
                 size_t const column = i % wobbly::config::Width;
 
                 wobbly::PointView <double> position (array, i);
-                bg::assign (position, initialPosition);
-                bg::add_point (position,
-                               wobbly::Point (column * bg::get <0> (tileSize),
-                                              row * bg::get <1> (tileSize)));
+                wgd::assign (position, initialPosition);
+                wgd::pointwise_add (position,
+                                    wobbly::Point (column * wgd::get <0> (tileSize),
+                                                   row * wgd::get <1> (tileSize)));
             }
         }
 
@@ -186,7 +148,7 @@ namespace wobbly
             for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
             {
                 wobbly::PointView <double> view (points, i);
-                double objectDistance = bg::distance (pos, view);
+                double objectDistance = wgd::distance (pos, view);
                 if (objectDistance < distance)
                 {
                     nearestIndex = i;
@@ -989,17 +951,19 @@ namespace wobbly
                     void MoveBy (wobbly::Vector const &delta)
                     {
                         for (auto &p : mPoints)
-                            bg::add_point (p.point, delta);
+                            wobbly::geometry::dimension::pointwise_add (p.point, delta);
                     }
                     
                     void Scale (wobbly::Point  const &origin,
                                 wobbly::Vector const &scaleFactor)
                     {
+                        namespace wgd = wobbly::geometry::dimension;
+
                         for (auto &p : mPoints)
                         {
-                            bg::subtract_point (p.point, origin);
-                            bg::multiply_point (p.point, scaleFactor);
-                            bg::add_point (p.point, origin);
+                            wgd::pointwise_subtract (p.point, origin);
+                            wgd::pointwise_scale (p.point, scaleFactor);
+                            wgd::pointwise_add (p.point, origin);
                         }
                     }
 
@@ -1125,16 +1089,16 @@ namespace wobbly
                                      double   mass,
                                      double   time)
         {
-            namespace bg = boost::geometry;
+            namespace wgd = wobbly::geometry::dimension;
 
             wobbly::Vector acceleration;
-            bg::assign_point (acceleration, force);
-            bg::divide_value (acceleration, mass);
+            wgd::assign (acceleration, force);
+            wgd::scale (acceleration, 1.0 / mass);
 
             /* v[t] = v[t - 1] + at */
             wobbly::Vector additionalVelocity (acceleration);
-            bg::multiply_value (additionalVelocity, time);
-            bg::add_point (velocity, additionalVelocity);
+            wgd::scale (additionalVelocity, time);
+            wgd::pointwise_add (velocity, additionalVelocity);
         }
     }
 }
@@ -1147,6 +1111,8 @@ wobbly::EulerIntegrate (double                           time,
                         wobbly::PointView <double>       &&invelocity,
                         wobbly::PointView <double const> &&inforce)
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     assert (mass > 0.0f);
 
     wobbly::PointView <double> position (std::move (inposition));
@@ -1156,13 +1122,13 @@ wobbly::EulerIntegrate (double                           time,
     /* Apply friction, which is exponentially
      * proportional to both velocity and time */
     wobbly::Vector totalForce;
-    bg::assign_point (totalForce, force);
+    wgd::assign (totalForce, force);
 
     wobbly::Vector frictionForce;
-    bg::assign_point (frictionForce, velocity);
-    bg::multiply_value (frictionForce, friction);
+    wgd::pointwise_add (frictionForce, velocity);
+    wgd::scale (frictionForce, friction);
 
-    bg::subtract_point (totalForce, frictionForce);
+    wgd::pointwise_subtract (totalForce, frictionForce);
 
     /* First apply velocity change for force
      * exerted over time */
@@ -1176,14 +1142,14 @@ wobbly::EulerIntegrate (double                           time,
      *   d[t] = ((v[t - 1] + v[t]) / 2) * t
      */
     wobbly::Vector positionDelta;
-    bg::assign_point (positionDelta, velocity);
-    bg::multiply_value (positionDelta, time / 2);
+    wgd::assign (positionDelta, velocity);
+    wgd::scale (positionDelta, time / 2);
 
-    bg::add_point (position, positionDelta);
+    wgd::pointwise_add (position, positionDelta);
 
     /* Return true if we still have velocity remaining */
-    bool result = std::fabs (bg::get <0> (velocity)) > 0.00 ||
-                  std::fabs (bg::get <1> (velocity)) > 0.00;
+    bool result = std::fabs (wgd::get <0> (velocity)) > 0.00 ||
+                  std::fabs (wgd::get <1> (velocity)) > 0.00;
 
     return result;
 }
@@ -1209,7 +1175,7 @@ inline void
 wobbly::EulerIntegration::Reset (size_t index)
 {
     wobbly::PointView <double> velocity (velocities, index);
-    bg::assign_value (velocity, 0.0);
+    wobbly::geometry::dimension::assign_value (velocity, 0.0);
 }
 
 namespace wobbly
@@ -1222,12 +1188,14 @@ namespace wobbly
                           P2             const &b,
                           wobbly::Vector const &desired)
         {
-            namespace bg = boost::geometry;
+            namespace wgd = wobbly::geometry::dimension;
 
-            wobbly::Vector delta (0.5 * (bg::get <0> (b) - bg::get <0> (a) +
-                                         bg::get <0> (desired)),
-                                  0.5 * (bg::get <1> (b) - bg::get <1> (a) +
-                                         bg::get <1> (desired)));
+            wobbly::Vector delta (0.5 * (wgd::get <0> (b) -
+                                         wgd::get <0> (a) +
+                                         wgd::get <0> (desired)),
+                                  0.5 * (wgd::get <1> (b) -
+                                         wgd::get <1> (a) +
+                                         wgd::get <1> (desired)));
             return delta;
         }
     }
@@ -1236,8 +1204,10 @@ namespace wobbly
 inline bool
 wobbly::Spring::ApplyForces (double springConstant) const
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     Vector desiredNegative (desiredDistance);
-    bg::multiply_value (desiredNegative, -1);
+    wgd::scale (desiredNegative, -1);
 
     Vector deltaA (springs::DeltaFromDesired (posA,
                                               posB,
@@ -1252,18 +1222,18 @@ wobbly::Spring::ApplyForces (double springConstant) const
     Vector springForceA (deltaA);
     Vector springForceB (deltaB);
 
-    bg::multiply_value (springForceA, springConstant);
-    bg::multiply_value (springForceB, springConstant);
+    wgd::scale (springForceA, springConstant);
+    wgd::scale (springForceB, springConstant);
 
-    bg::add_point (forceA, springForceA);
-    bg::add_point (forceB, springForceB);
+    wgd::pointwise_add (forceA, springForceA);
+    wgd::pointwise_add (forceB, springForceB);
 
     /* Return true if a delta was applied at any point */
     Vector delta (geometry::Absolute (deltaA));
-    bg::add_point (delta, geometry::Absolute (deltaB));
+    wgd::pointwise_add (delta, geometry::Absolute (deltaB));
 
-    bool result = bg::get <0> (delta) > 0.00 ||
-                  bg::get <1> (delta) > 0.00;
+    bool result = wgd::get <0> (delta) > 0.00 ||
+                  wgd::get <1> (delta) > 0.00;
 
     return result;
 }
@@ -1291,8 +1261,10 @@ wobbly::SpringMesh::CalculateForces (double springConstant) const
 inline wobbly::Point
 wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
 {
-    double const u = bg::get <0> (normalized);
-    double const v = bg::get <1> (normalized);
+    namespace wgd = ::wobbly::geometry::dimension;
+
+    double const u = wgd::get <0> (normalized);
+    double const v = wgd::get <1> (normalized);
 
     /* Create a vector of coefficients like
      * | (1 - u)^3      |

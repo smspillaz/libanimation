@@ -12,7 +12,6 @@
  *  - std::ostream
  *  - std::function
  *  - std::vector
- *  - boost::geometry
  *
  * See LICENCE.md for Copyright information
  */
@@ -30,37 +29,14 @@
 #include <type_traits>                  // for enable_if, is_same
 #include <vector>                       // for vector
 
-#include <boost/geometry/core/access.hpp>  // for get
-#include <boost/geometry/core/coordinate_dimension.hpp>  // for dimension
-#include <boost/geometry/core/coordinate_type.hpp>  // for coordinate_type
-#include <boost/geometry/core/tag.hpp>  // for tag
-#include <boost/geometry/core/tags.hpp>  // for geometry
-#include <boost/geometry/geometries/point.hpp>  // for point
-#include <boost/mpl/assert.hpp>         // for BOOST_MPL_ASSERT
-#include <boost/test/floating_point_comparison.hpp> // IWYU pragma: keep
-#include <boost/test/predicate_result.hpp>  // for test_tools
-#include <boost/type_traits/is_same.hpp>  // for is_same
+#include <wobbly/wobbly.h>
 
 #include <gmock/gmock.h>       // IWYU pragma: keep
-
-namespace boost
-{
-    namespace geometry
-    {
-        namespace cs
-        {
-            struct cartesian;
-        }
-    }
-}
-
 
 namespace wobbly
 {
     namespace models
     {
-        namespace bg = boost::geometry;
-
         namespace impl
         {
             template <typename T>
@@ -88,7 +64,7 @@ namespace wobbly
 
                 typedef std::unique_ptr <DataModel> Unique;
 
-                typedef bg::model::point <NT, 2, bg::cs::cartesian> Point;
+                typedef wobbly::PointModel <NT> Point;
                 typedef std::function <NumericType (int)> Generator;
                 typedef std::function <Unique (Generator const &,
                                                unsigned int)> Factory;
@@ -101,6 +77,8 @@ namespace wobbly
 
         namespace exponential
         {
+            namespace wgd = ::wobbly::geometry::dimension;
+
             /* Given a function which generates values from x = 0 -> y = c
              * two data points on that line, and the value c,
              * solve the following equation for the values n and w:
@@ -128,8 +106,8 @@ namespace wobbly
             SolveForECoeff (typename DataModel <N>::Point const &xZeroPoint,
                             N                                   constant)
             {
-                N x = bg::get <0> (xZeroPoint);
-                N y = bg::get <1> (xZeroPoint);
+                N x = wgd::get <0> (xZeroPoint);
+                N y = wgd::get <1> (xZeroPoint);
 
                 assert (x == 0.0);
 
@@ -434,11 +412,25 @@ namespace wobbly
         };
     }
 
+    namespace testing
+    {
+        template <typename T, typename U, typename V>
+        bool close_at_tolerance (T const &lhs, U const &rhs, V const &epsilon)
+        {
+            return std::fabs (rhs - lhs) < epsilon;
+        }
+
+        template <typename T, typename U>
+        bool is_small (T const &value, U const &epsilon)
+        {
+            return close_at_tolerance (value, std::numeric_limits <T>::min(), epsilon);
+        }
+    }
+
     namespace matchers
     {
         namespace t = ::testing;
-        namespace bfpc = ::boost::math::fpc;
-        namespace bg = boost::geometry;
+        namespace wgd = ::wobbly::geometry::dimension;
 
         template <typename GeometryType, typename Compare>
         class GeometricallyEqualMatcher :
@@ -472,23 +464,21 @@ namespace wobbly
                     static inline bool apply (LHS const &lhs,
                                               RHS const &rhs)
                     {
-                        typedef bg::traits::coordinate_type <LHS> LT;
-                        typedef typename LT::type LTT;
+                        const float epsilon = 10e-7;
+                        typedef typename wgd::Dimension <LHS>::data_type LT;
 
                         bool result = false;
 
                         /* If we are comparing to zero, then use
                          * check_is_small as opposed to check_is_close */
-                        if (bg::get <D> (rhs) == 0.0)
-                            result = bfpc::is_small (bg::get <D> (lhs),
-                                                     10e-9);
+                        if (wgd::get <D> (rhs) == 0.0)
+                            result = wobbly::testing::is_small (wgd::get <D> (lhs),
+                                                                epsilon);
                         else
                         {
-                            auto tolerance = bfpc::percent_tolerance (10e-9);
-                            auto within  =
-                                bfpc::close_at_tolerance <LTT> (tolerance);
-                            result = within (bg::get <D> (lhs),
-                                             bg::get <D> (rhs));
+                            result = wobbly::testing::close_at_tolerance <LT> (wgd::get <D> (lhs),
+                                                                               wgd::get <D> (rhs),
+                                                                               epsilon);
                         }
 
                         return result &&
@@ -508,12 +498,8 @@ namespace wobbly
                 template <typename LHS, typename RHS>
                 static inline bool compare (LHS const &lhs, RHS const &rhs)
                 {
-                    typedef typename bg::traits::dimension <LHS>::type DimLHS;
-                    typedef typename bg::traits::dimension <RHS>::type DimRHS;
-
-                    BOOST_MPL_ASSERT ((boost::is_same <DimLHS, DimRHS>));
-
-                    typedef Equal <LHS, RHS, 0, DimLHS::value> Comparator;
+                    typedef wgd::Dimension <LHS> DimLHS;
+                    typedef Equal <LHS, RHS, 0, DimLHS::dimensions> Comparator;
 
                     return Comparator::apply (lhs, rhs);
                 }
@@ -521,7 +507,7 @@ namespace wobbly
                 Compare geometry;
         };
 
-        /* We want to be able to pass any compartible boost::geometry to this
+        /* We want to be able to pass any compatible wobbly::dimension to this
          * matcher so it needs to be a template class with a template
          * conversion operator to Matcher <T> (eg, to signify that it is
          * T that is being matched, but Geometry that is being compared) */
@@ -576,16 +562,10 @@ namespace wobbly
         namespace detail
         {
             template <typename T>
-            struct GeoTrait :
-                public bg::traits::tag <T>
-            {
-            };
-
-            template <typename T>
             struct Geo
             {
                 static constexpr bool value =
-                    !(std::is_same <typename GeoTrait <T>::type, void>::value);
+                    !(std::is_same <typename wgd::Dimension <T>::data_type, void>::value);
             };
 
             template <typename T>
@@ -716,11 +696,9 @@ namespace wobbly
                                 << std::endl;
 
                         /* Close to specified tolerance */
-                        auto tolerance = bfpc::percent_tolerance (mTolerance);
-                        auto within  =
-                            bfpc::close_at_tolerance <NumericType> (tolerance);
-
-                        if (!within (modelPrediction, actual))
+                        if (!wobbly::testing::close_at_tolerance (modelPrediction,
+                                                                  actual,
+                                                                  mTolerance))
                         {
                             if (os)
                                 *os << " (exceeding tolerance: "

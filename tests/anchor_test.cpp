@@ -14,7 +14,7 @@
 #include <gmock/gmock-spec-builders.h>  // for EXPECT_CALL, etc
 #include <gtest/gtest.h>                // for TEST_F, Test, Types, etc
 
-#include <wobbly_internal.h>            // for TrackedAnchors
+#include <wobbly/wobbly_internal.h>            // for TrackedAnchors
 
 using ::testing::_;
 using ::testing::AtLeast;

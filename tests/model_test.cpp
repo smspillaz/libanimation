@@ -16,15 +16,6 @@
 #include <stdlib.h>                     // for exit
 #include <math.h>                       // for ceil
 
-#include <boost/concept/usage.hpp>
-#include <boost/geometry/algorithms/for_each.hpp>  // for for_each_point
-#include <boost/geometry/algorithms/within.hpp>  // for within
-#include <boost/geometry/geometries/box.hpp>  // for box
-#include <boost/geometry/geometries/polygon.hpp>  // for polygon
-#include <boost/test/floating_point_comparison.hpp>
-#include <boost/test/predicate_result.hpp>  // for test_tools
-#include <boost/test/utils/wrap_stringstream.hpp>  // for operator<<
-
 #include <gmock/gmock-cardinalities.h>  // for AtLeast
 #include <gmock/gmock-generated-function-mockers.h>  // for FunctionMocker, etc
 #include <gmock/gmock-matchers.h>       // for EXPECT_THAT, etc
@@ -36,11 +27,11 @@
 #include <gtest/gtest.h>                // for AssertHelper, etc
 
 #include <wobbly/wobbly.h>    // for Point, PointView, Vector, etc
-
-#include <wobbly_internal.h>            // for MeshArray, SpringMesh, etc
+#include <wobbly/wobbly_internal.h>            // for MeshArray, SpringMesh, etc
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <ostream_point_operator.h>     // for operator<<
+#include <within_geometry_matcher.h>
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -59,13 +50,14 @@ using ::testing::WithParamInterface;
 
 using ::wobbly::matchers::Eq;
 using ::wobbly::matchers::SatisfiesModel;
+using ::wobbly::matchers::WithinGeometry;
 
 using ::wobbly::models::Parabolic;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     class SingleObjectStorage
     {
         public:
@@ -175,12 +167,12 @@ namespace
 
             return GetParams ([&translation](wobbly::Point &point) {
                  /* Scale on center */
-                bg::subtract_point (point, translation);
+                wgd::pointwise_subtract (point, translation);
                 /* Older versions of cppcheck have trouble seeing through
                  * the lambda */
                 // cppcheck-suppress unreachableCode
-                bg::multiply_value (point, 1.1);
-                bg::add_point (point, translation);
+                wgd::scale (point, 1.1);
+                wgd::pointwise_add (point, translation);
             });
         }
 
@@ -189,13 +181,13 @@ namespace
             wobbly::Vector translation (EvenSize / 2, EvenSize / 2);
 
             return GetParams ([&translation](wobbly::Point &point) {
-                 /* Scale on center */
-                bg::subtract_point (point, translation);
+                /* Scale on center */
+                wgd::pointwise_subtract (point, translation);
                 /* Older versions of cppcheck have trouble seeing through
                  * the lambda */
                 // cppcheck-suppress unreachableCode
-                bg::divide_value (point, 1.1);
-                bg::add_point (point, translation);
+                wgd::scale (point, 1.0 / 1.1);
+                wgd::pointwise_add (point, translation);
             });
         }
 
@@ -214,7 +206,7 @@ namespace
                 wobbly::PointView <double> pv (array, i);
                 ParamType param;
 
-                bg::assign (param.point, pv);
+                wgd::assign (param.point, pv);
                 param.expectedIndex = i;
 
                 trans (param.point);
@@ -267,7 +259,7 @@ namespace
                                    wobbly::Vector const       &movement)
         {
             wobbly::PointView <double> pv (ptr.get (), 0);
-            bg::add_point (pv, movement);
+            wgd::pointwise_add (pv, movement);
         }
 
         wobbly::SpringMesh::PosPreference firstPreference;
@@ -297,11 +289,13 @@ namespace
                  * component distance from candidate to origin */
 
                 wobbly::Vector delta;
-                bg::assign (delta, candidate);
-                bg::subtract_point (delta, origin);
+                wgd::assign (delta, candidate);
+                wgd::pointwise_subtract (delta, origin);
 
-                auto vecTanTheta = bg::get <1> (vec) / bg::get <0> (vec);
-                auto distTanTheta = bg::get <1> (delta) / bg::get <0> (delta);
+                auto vecTanTheta = (wgd::get <1> (vec) /
+                                    wgd::get <0> (vec));
+                auto distTanTheta = (wgd::get <1> (delta) /
+                                     wgd::get <0> (delta));
 
                 if (listener)
                     *listener << "vector (" << vec << ")'s tan(theta) is "
@@ -310,12 +304,7 @@ namespace
                               << candidate << ")" << " with delta ("
                               << delta << ") is " << distTanTheta;
 
-                namespace bfpc = boost::math::fpc;
-                typedef decltype (vecTanTheta) NumericType;
-                auto tolerance = bfpc::percent_tolerance (10e-9);
-                auto within  =
-                    bfpc::close_at_tolerance <NumericType> (tolerance);
-                return within (vecTanTheta, distTanTheta);
+                return wobbly::testing::close_at_tolerance (vecTanTheta, distTanTheta, 10e-7);
             }
 
             void DescribeTo (::std::ostream *os) const
@@ -365,16 +354,16 @@ namespace
         auto result = springMesh.CalculateForces (SpringConstant);
 
         wobbly::Point anchorPosition (install);
-        bg::add_point (anchorPosition, movement);
+        wgd::pointwise_add (anchorPosition, movement);
 
         wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
         wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
 
         wobbly::Point anchorLeftPoint (anchorPosition);
-        bg::add_point (anchorLeftPoint, leftOffset);
+        wgd::pointwise_add (anchorLeftPoint, leftOffset);
 
         wobbly::Point anchorRightPoint (anchorPosition);
-        bg::add_point (anchorRightPoint, rightOffset);
+        wgd::pointwise_add (anchorRightPoint, rightOffset);
 
         wobbly::PointView <double const> firstPoint (mesh, 1);
         wobbly::PointView <double const> secondPoint (mesh, 2);
@@ -414,11 +403,11 @@ namespace
         wobbly::Vector const secondMovement (25, -50);
 
         wobbly::Point firstAnchorPoint (firstInstall);
-        bg::add_point (firstAnchorPoint, firstMovement);
+        wgd::pointwise_add (firstAnchorPoint, firstMovement);
         ApplyMovement (firstHandle.data, firstMovement);
 
         wobbly::Point secondAnchorPoint (secondInstall);
-        bg::add_point (secondAnchorPoint, secondMovement);
+        wgd::pointwise_add (secondAnchorPoint, secondMovement);
         ApplyMovement (secondHandle.data, secondMovement);
 
         /* Calculate forces */
@@ -427,13 +416,13 @@ namespace
         /* The desired delta between the first point and its base neighbour is
          * TileWidth / 2, 0 */
         wobbly::Point leftOfFirstAnchor (-TileWidth (EvenSize) / 2, 0);
-        bg::add_point (leftOfFirstAnchor, firstAnchorPoint);
+        wgd::pointwise_add (leftOfFirstAnchor, firstAnchorPoint);
 
         /* For the second point, because we inserted it between the first
          * spring and the second base point, the desired delta will be half
          * of the first spring length, eg, TileWidth (EvenSize) / 4, 0 */
         wobbly::Point rightOfSecondAnchor (TileWidth (EvenSize) / 4, 0);
-        bg::add_point (rightOfSecondAnchor, secondAnchorPoint);
+        wgd::pointwise_add (rightOfSecondAnchor, secondAnchorPoint);
 
         wobbly::PointView <double const> firstPoint (mesh, 1);
         wobbly::PointView <double const> secondPoint (mesh, 2);
@@ -477,11 +466,11 @@ namespace
         wobbly::Vector const secondMovement (25, -50);
 
         wobbly::Point firstAnchorPoint (firstInstall);
-        bg::add_point (firstAnchorPoint, firstMovement);
+        wgd::pointwise_add (firstAnchorPoint, firstMovement);
         ApplyMovement (first->data, firstMovement);
 
         wobbly::Point secondAnchorPoint (secondInstall);
-        bg::add_point (secondAnchorPoint, secondMovement);
+        wgd::pointwise_add (secondAnchorPoint, secondMovement);
         ApplyMovement (second->data, secondMovement);
 
         /* Now that both handles have been moved, make the second one expire */
@@ -491,16 +480,16 @@ namespace
         auto result = springMesh.CalculateForces (SpringConstant);
 
         wobbly::Point anchorPosition (firstInstall);
-        bg::add_point (anchorPosition, firstMovement);
+        wgd::pointwise_add (anchorPosition, firstMovement);
 
         wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
         wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
 
         wobbly::Point anchorLeftPoint (firstAnchorPoint);
-        bg::add_point (anchorLeftPoint, leftOffset);
+        wgd::pointwise_add (anchorLeftPoint, leftOffset);
 
         wobbly::Point anchorRightPoint (firstAnchorPoint);
-        bg::add_point (anchorRightPoint, rightOffset);
+        wgd::pointwise_add (anchorRightPoint, rightOffset);
 
         wobbly::PointView <double const> firstPoint (mesh, 1);
         wobbly::PointView <double const> secondPoint (mesh, 2);
@@ -564,11 +553,11 @@ namespace
             wobbly::Vector const secondMovement (25, -50);
 
             wobbly::Point firstAnchorPoint (firstInstall);
-            bg::add_point (firstAnchorPoint, firstMovement);
+            wgd::pointwise_add (firstAnchorPoint, firstMovement);
             ApplyMovement (first->data, firstMovement);
 
             wobbly::Point secondAnchorPoint (secondInst);
-            bg::add_point (secondAnchorPoint, secondMovement);
+            wgd::pointwise_add (secondAnchorPoint, secondMovement);
             ApplyMovement (second->data, secondMovement);
 
             /* Kill the first handle before the second */
@@ -605,8 +594,8 @@ namespace
                                             Get                  get,
                                             size_t               offset) {
                 wobbly::PointView <double> pv (points, offset);
-                bg::assign (pv, (spring.*get) ());
-                bg::add_point (pv, desiredOffset);
+                wgd::assign (pv, (spring.*get) ());
+                wgd::pointwise_add (pv, desiredOffset);
 
                 return wobbly::PointView <double const> (points, offset);
             };
@@ -628,18 +617,18 @@ namespace
         auto result = springMesh.CalculateForces (SpringConstant);
 
         wobbly::Point anchorPosition (install);
-        bg::add_point (anchorPosition, movement);
+        wgd::pointwise_add (anchorPosition, movement);
 
         wobbly::Vector const leftOffset (-TileWidth (EvenSize) / 2, 0);
         wobbly::Vector const rightOffset (TileWidth (EvenSize) / 2, 0);
 
         wobbly::Point anchorLeftPoint (anchorPosition);
-        bg::add_point (anchorLeftPoint, leftOffset);
-        bg::add_point (anchorLeftPoint, desiredOffset);
+        wgd::pointwise_add (anchorLeftPoint, leftOffset);
+        wgd::pointwise_add (anchorLeftPoint, desiredOffset);
 
         wobbly::Point anchorRightPoint (anchorPosition);
-        bg::add_point (anchorRightPoint, rightOffset);
-        bg::add_point (anchorRightPoint, desiredOffset);
+        wgd::pointwise_add (anchorRightPoint, rightOffset);
+        wgd::pointwise_add (anchorRightPoint, desiredOffset);
 
         /* We don't add anything to firstPoint and secondPoint here
          * because there will be an offset of desiredOffset from
@@ -681,21 +670,12 @@ namespace
             wobbly::Model model;
     };
 
-    class PointCeilingOperation
-    {
-        public:
-
-            template <typename P, int I>
-            void apply (P &point) const
-            {
-                bg::set <I> (point, std::ceil (bg::get <I> (point)));
-            }
-    };
-
     template <typename Point>
     void PointCeiling (Point &p)
     {
-        bg::for_each_coordinate (p, PointCeilingOperation ());
+        wgd::for_each_coordinate (p, [](auto const &coord) -> decltype(auto) {
+            return std::ceil (coord);
+        });
     }
 
     void MoveModelASmallAmount (wobbly::Model &model)
@@ -721,7 +701,7 @@ namespace
         auto point (GetTruncatedDeformedCenter (model));
 
         auto TextureCenterOffsetByOne (TextureCenter);
-        bg::add_point (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
+        wgd::pointwise_add (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
 
         EXPECT_THAT (point,
                      Eq (TextureCenterOffsetByOne));
@@ -737,7 +717,7 @@ namespace
         MoveModelASmallAmount (model);
         auto point (GetTruncatedDeformedCenter (model));
         auto TextureCenterOffsetByOne (TextureCenter);
-        bg::add_point (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
+        wgd::pointwise_add (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
 
 
         EXPECT_THAT (point,
@@ -751,7 +731,7 @@ namespace
         MoveModelASmallAmount (model);
         auto point (GetTruncatedDeformedCenter (model));
         auto TextureCenterOffsetByOne (TextureCenter);
-        bg::add_point (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
+        wgd::pointwise_add (TextureCenterOffsetByOne, wobbly::Vector (1, 1));
 
 
         EXPECT_THAT (point,
@@ -790,7 +770,22 @@ namespace
                      Not (Eq (TextureCenter)));
     }
 
-    typedef std::tuple <wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
+    TEST_F (SpringBezierModel, MovingAnchorWithSecondGrabCausesDeformation)
+    {
+        auto anchor (model.GrabAnchor (wobbly::Point (TextureWidth / 2, 0)));
+
+        {
+            auto secondAnchor (model.GrabAnchor (wobbly::Point (TextureWidth, 0)));
+            anchor.MoveBy (wobbly::Vector (1, 1));
+        }
+
+        auto point (GetTruncatedDeformedCenter (model));
+
+        EXPECT_THAT (point,
+                     Not (Eq (TextureCenter)));
+    }
+
+    typedef std::tuple <wobbly::Point, wobbly::Point, wobbly::Point, size_t> SpringGrabParams;
 
     class SpringBezierModelGrabPositions :
         public SpringBezierModel,
@@ -800,15 +795,19 @@ namespace
 
             SpringBezierModelGrabPositions () :
                 grabPosition (std::get <0> (GetParam ())),
-                movement (std::get <1> (GetParam ())),
-                extremeIndex (std::get <2> (GetParam ()))
+                oppositeGrabPosition (std::get <1> (GetParam ())),
+                movement (std::get <2> (GetParam ())),
+                extremeIndex (std::get <3> (GetParam ()))
             {
             }
 
             wobbly::Point const &grabPosition;
+            wobbly::Point const &oppositeGrabPosition;
             wobbly::Point const &movement;
             size_t              extremeIndex;
     };
+
+    typedef wobbly::Box <wobbly::Point> PointBox;
 
     /* Only tests the GrabIndex strategy */
     TEST_P (SpringBezierModelGrabPositions, GrabsCorrectIndex)
@@ -817,7 +816,7 @@ namespace
         grab.MoveBy (movement);
 
         wobbly::Point transformed (grabPosition);
-        bg::add_point (transformed, movement);
+        wgd::pointwise_add (transformed, movement);
 
         EXPECT_THAT (model.Extremes ()[extremeIndex],
                      Eq (transformed));
@@ -841,18 +840,48 @@ namespace
                      Eq (wobbly::Point (100, 100)));
     }
 
+    TEST_P (SpringBezierModelGrabPositions, SettlesAfterReleasingSecond)
+    {
+        /* Check that when we grab the model from each of the four corners
+         * and at each corresponding opposite corner, move the first anchor
+         * by 100, 100, then release the second anchor, that the model
+         * always settles at exactly 100, 100
+         *
+         * While exact positioning isn't possible without anchors grabbed,
+         * it is almost always desired in this case */
+        wobbly::Anchor grab (model.GrabAnchor (grabPosition));
+
+        {
+            wobbly::Anchor secondGrab (model.GrabAnchor (oppositeGrabPosition));
+            grab.MoveBy (wobbly::Vector (100, 100));
+        }
+
+        /* Wait for model to settle */
+        while (model.Step (1));
+
+        /* We can't be exact here, since a full integration is required to
+         * compute the target position. */
+        EXPECT_THAT (model.Extremes ()[0],
+                     WithinGeometry (PointBox (wobbly::Point (97.0, 97.0),
+                                               wobbly::Point (103.0, 103.0))));
+    }
+
     SpringGrabParams const springGrabParams[] =
     {
         SpringGrabParams (wobbly::Point (0.0, 0.0),
+                          wobbly::Point (TextureWidth, TextureHeight),
                           wobbly::Point (-1.0, -1.0),
                           0),
         SpringGrabParams (wobbly::Point (TextureWidth, 0.0),
+                          wobbly::Point (0.0, TextureHeight),
                           wobbly::Point (1.0, -1.0),
                           1),
         SpringGrabParams (wobbly::Point (0.0, TextureHeight),
+                          wobbly::Point (TextureWidth, 0.0),
                           wobbly::Point (-1.0, 1.0),
                           2),
         SpringGrabParams (wobbly::Point (TextureWidth, TextureHeight),
+                          wobbly::Point (0.0, 0.0),
                           wobbly::Point (1.0, 1.0),
                           3)
     };
@@ -879,7 +908,7 @@ namespace
         /* Older versions of gmock don't support matching against a vector */
         auto scaledPointMatcher =
             [&scaleFactor](wobbly::Point p) -> PointMatcher {
-                bg::multiply_point (p, scaleFactor);
+                wgd::pointwise_scale (p, scaleFactor);
                 return Eq (p);
             };
 
@@ -908,9 +937,9 @@ namespace
         std::array <wobbly::Point, 4> const extremes = model.Extremes ();
         auto scaledPointMatcher =
             [&scaleFactor, &movement](wobbly::Point p) -> PointMatcher {
-                bg::subtract_point (p, movement);
-                bg::multiply_point (p, scaleFactor);
-                bg::add_point (p, movement);
+                wgd::pointwise_subtract (p, movement);
+                wgd::pointwise_scale (p, scaleFactor);
+                wgd::pointwise_add (p, movement);
                 return Eq (p);
             };
 
@@ -1031,81 +1060,6 @@ namespace
 
         EXPECT_FALSE (this->model.Step (1));
     }
-
-    template <typename ParentGeometry>
-    class WithinGeometryMatcher
-    {
-        public:
-
-            WithinGeometryMatcher (ParentGeometry const &parent) :
-                parent (parent)
-            {
-            }
-
-            template <typename ChildGeometry>
-            bool MatchAndExplain (ChildGeometry const &child,
-                                  MatchResultListener *listener) const
-            {
-                return bg::within (child, parent);
-            }
-
-            void DescribeTo (std::ostream *os) const
-            {
-                *os << "is";
-                Describe (*os);
-            }
-
-            void DescribeNegationTo (std::ostream *os) const
-            {
-                *os << "is not";
-                Describe (*os);
-            }
-
-        private:
-
-            void Describe (std::ostream &os) const
-            {
-                os << " within :" << std::endl;
-                bg::model::polygon <wobbly::Point> poly;
-                bg::assign (poly, parent);
-                bg::for_each_point (poly, PrintPoint (&os));
-            }
-
-            /* FIXME: Older versions of boost::geometry like to copy
-             * visitors, which means that std::ostream *os can't be
-             * a reference */
-            class PrintPoint
-            {
-                public:
-
-                    PrintPoint (std::ostream *os) :
-                        os (os)
-                    {
-                    }
-
-                    template <typename Point>
-                    void operator () (Point const &p)
-                    {
-                        *os << " - " << p << std::endl;
-                    }
-
-                private:
-
-                   std::ostream *os;
-            };
-
-            ParentGeometry parent;
-    };
-
-    template <typename ParentGeometry>
-    inline PolymorphicMatcher <WithinGeometryMatcher <ParentGeometry> >
-    WithinGeometry (ParentGeometry const &parent)
-    {
-        WithinGeometryMatcher <ParentGeometry> matcher (parent);
-        return MakePolymorphicMatcher (matcher);
-    }
-
-    typedef bg::model::box <wobbly::Point> PointBox;
 
     TYPED_TEST (SpringBezierModelAnchorStrategy, EntireModelMovesWhileGrabbed)
     {
@@ -1377,8 +1331,8 @@ namespace
         GrabModelMoveAndStepASmallAmount (lowerSpringKModel);
         GrabModelMoveAndStepASmallAmount (higherSpringKModel);
 
-        EXPECT_GT (bg::get <0> (higherSpringKModel.Extremes ()[0]),
-                   bg::get <0> (lowerSpringKModel.Extremes ()[0]));
+        EXPECT_GT (wgd::get <0> (higherSpringKModel.Extremes ()[0]),
+                   wgd::get <0> (lowerSpringKModel.Extremes ()[0]));
     }
 
     TEST (SpringBezierModelSettings, ModelWithLowerFrictionTakesFasterFirstStep)
@@ -1400,8 +1354,8 @@ namespace
         GrabModelMoveAndStepASmallAmount (lowerFrictionModel);
         GrabModelMoveAndStepASmallAmount (higherFrictionModel);
 
-        EXPECT_GT (bg::get <0> (lowerFrictionModel.Extremes ()[0]),
-                   bg::get <0> (higherFrictionModel.Extremes ()[0]));
+        EXPECT_GT (wgd::get <0> (lowerFrictionModel.Extremes ()[0]),
+                   wgd::get <0> (higherFrictionModel.Extremes ()[0]));
     }
 
     struct MockIntegration
@@ -1505,7 +1459,7 @@ namespace
         wobbly::PointView <double> pointView (TestFixture::points, 0);
 
         /* First apply a force to an object and integrate */
-        bg::set <0> (forceView, 1.0);
+        wgd::set <0> (forceView, 1.0);
         TestFixture::integrator.Step (0,
                                       1.0,
                                       1.0,
@@ -1514,10 +1468,10 @@ namespace
                                       TestFixture::forces);
 
         wobbly::Point expectedPosition;
-        bg::assign_point (expectedPosition, pointView);
+        wgd::assign (expectedPosition, pointView);
 
         /* Remove force, reset and integrate again */
-        bg::set <0> (forceView, 0.0);
+        wgd::set <0> (forceView, 0.0);
         TestFixture::integrator.Reset (0);
         TestFixture::integrator.Step (0,
                                       1.0,
@@ -1537,10 +1491,10 @@ namespace
         wobbly::PointView <double> pointView (TestFixture::points, 0);
 
         wobbly::Point initialPosition;
-        bg::assign_point (initialPosition, pointView);
+        wgd::assign (initialPosition, pointView);
 
         /* Reset, apply force and integrate */
-        bg::set <0> (forceView, 1.0);
+        wgd::set <0> (forceView, 1.0);
         TestFixture::integrator.Reset (0);
         TestFixture::integrator.Step (0,
                                       1.0,
@@ -1563,8 +1517,8 @@ namespace
                 TypeParam integrator;
 
                 /* Reset velocity and force */
-                bg::assign (pointView, wobbly::Point (0, 0));
-                bg::assign (forceView, wobbly::Vector (1.0f, 0));
+                wgd::assign (pointView, wobbly::Point (0, 0));
+                wgd::assign (forceView, wobbly::Vector (1.0f, 0));
 
                 integrator.Step (0,
                                  timestep,
@@ -1573,7 +1527,7 @@ namespace
                                  TestFixture::points,
                                  TestFixture::forces);
 
-                return bg::get <0> (pointView);
+                return wgd::get <0> (pointView);
             };
 
         EXPECT_THAT (frictionlessHorizontalPositionFunction,

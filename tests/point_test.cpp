@@ -19,10 +19,10 @@ using ::testing::Test;
 using ::testing::Values;
 using ::testing::WithParamInterface;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     class DoublePointView :
         public Test,
         public WithParamInterface <size_t>
@@ -44,17 +44,17 @@ namespace
     TEST_P (DoublePointView, WriteXWithOffset)
     {
         wobbly::PointView <double> pv (array, pointOffset);
-        bg::set <0> (pv, 1);
+        wgd::set <0> (pv, 1.0);
 
-        EXPECT_EQ (array[arrayOffset], 1);
+        EXPECT_EQ (array[arrayOffset], 1.0);
     }
 
     TEST_P (DoublePointView, WriteYWithOffset)
     {
         wobbly::PointView <double> pv (array, pointOffset);
-        bg::set <1> (pv, 1);
+        wgd::set <1> (pv, 1.0);
 
-        EXPECT_EQ (array[arrayOffset + 1], 1);
+        EXPECT_EQ (array[arrayOffset + 1], 1.0);
     }
 
     INSTANTIATE_TEST_CASE_P (DuplexMeshArray, DoublePointView,
@@ -68,6 +68,6 @@ namespace
         wobbly::PointView <double> mutpv (array, 1);
         wobbly::PointView <double const> constpv (mutpv);
 
-        EXPECT_TRUE (bg::equals (mutpv, constpv));
+        EXPECT_TRUE (wgd::equals (mutpv, constpv));
     }
 }

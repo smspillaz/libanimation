@@ -13,15 +13,12 @@
 
 #include <cmath>                        // for pow
 
-#include <boost/test/utils/wrap_stringstream.hpp>  // for operator<<
-
 #include <gmock/gmock-matchers.h>       // for ElementsAreArray, etc
 #include <gmock/gmock.h>                // IWYU pragma: keep
 #include <gtest/gtest.h>                // for AssertHelper, TEST_F, etc
 
 #include <wobbly/wobbly.h>    // for PointView, Point, Vector
-
-#include <wobbly_internal.h>            // for EulerIntegrate
+#include <wobbly/wobbly_internal.h>            // for EulerIntegrate
 
 #include <mathematical_model_matcher.h>  // for SatisfiesModel, Linear, etc
 
@@ -35,10 +32,10 @@ using ::wobbly::matchers::WithTolerance;
 using ::wobbly::models::Linear;
 using ::wobbly::models::Parabolic;
 
-namespace bg = boost::geometry;
-
 namespace
 {
+    namespace wgd = wobbly::geometry::dimension;
+
     class SingleObjectStorage
     {
         public:
@@ -102,7 +99,7 @@ namespace
 
     TEST_F (EulerIntegration, ContinueStepWhenObjectsHaveVelocity)
     {
-        bg::set <0> (view.velocity, 1.0);
+        wgd::set <0> (view.velocity, 1.0);
 
         /* Integrate without any friction */
         EXPECT_TRUE (wobbly::EulerIntegrate (1,
@@ -115,7 +112,7 @@ namespace
 
     TEST_F (EulerIntegration, NoFurtherStepWhenObjectsHaveNoVelocity)
     {
-        bg::set <0> (view.velocity, 0.0);
+        wgd::set <0> (view.velocity, 0.0);
 
         /* Integrate without any friction */
         EXPECT_FALSE (wobbly::EulerIntegrate (1,
@@ -130,8 +127,8 @@ namespace
     {
         std::function <double (int)> horizontalVelocityFunction =
             [this](int timestep) -> double {
-                bg::assign_point (view.position, wobbly::Point (1, 1));
-                bg::assign_point (view.velocity, wobbly::Point (1, 0));
+                wgd::assign (view.position, wobbly::Point (1, 1));
+                wgd::assign (view.velocity, wobbly::Point (1, 0));
 
                 wobbly::EulerIntegrate (timestep,
                                         1,
@@ -140,7 +137,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return bg::get <0> (view.velocity);
+                return wgd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (horizontalVelocityFunction,
@@ -152,8 +149,8 @@ namespace
         std::function <double (int)> frictionlessHorizontalVelocityFunction =
             [this](int timestep) -> double {
                 /* Reset velocity and force */
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
+                wgd::assign (view.velocity, wobbly::Vector (0, 0));
+                wgd::assign (view.force, wobbly::Vector (1.0f, 0));
 
                 wobbly::EulerIntegrate (timestep,
                                         0,
@@ -162,7 +159,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return bg::get <0> (view.velocity);
+                return wgd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (frictionlessHorizontalVelocityFunction,
@@ -177,9 +174,9 @@ namespace
         std::function <double (int)> frictionToVelocityFunction =
             [this, range](int frictionAmount) -> double {
                 /* Reset velocity and force */
-                bg::assign (view.position, wobbly::Point (0, 0));
-                bg::assign (view.velocity, wobbly::Vector (0, 0));
-                bg::assign (view.force, wobbly::Vector (1.0f, 0));
+                wgd::assign (view.position, wobbly::Point (0, 0));
+                wgd::assign (view.velocity, wobbly::Vector (0, 0));
+                wgd::assign (view.force, wobbly::Vector (1.0f, 0));
 
                 double frictionProportion =
                     frictionAmount / static_cast <double> (range);
@@ -195,7 +192,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return bg::get <0> (view.velocity);
+                return wgd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (frictionToVelocityFunction,

@@ -1,3 +1,12 @@
+libwobbly (0.3.0) eos; urgency=medium
+
+  * build: Port to Meson
+  * wobbly: Remove dependency on boost
+  * debian/control:
+     - Remove dependency on boost
+
+ -- Sam Spilsbury <sam@endlessm.com>  Wed, 04 Jul 2018 08:24:25 +0800
+
 libwobbly (0.2.1) eos; urgency=medium
 
   * cmake: Add SOVERSION to library (credit: Robert McQueen)
