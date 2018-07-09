@@ -1,2 +1,2 @@
-usr/include/*
-usr/lib/*/pkgconfig/*
+usr/include/wobbly/*
+usr/lib/*/pkgconfig/libwindowfx_wobbly-0.3.pc

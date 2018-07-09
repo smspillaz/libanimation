@@ -15,5 +15,6 @@ gtest_project = subproject('googletest')
 wobbly_inc = include_directories('.')
 
 subdir('wobbly')
+subdir('wobbly-glib')
 subdir('matchers')
 subdir('tests')
