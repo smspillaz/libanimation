@@ -5,6 +5,7 @@ Build-Depends: debhelper (>= 8.0.0),
                cdbs,
                git,
                gobject-introspection,
+               libgirepository1.0-dev,
                libglib2.0-dev,
                meson
 Standards-Version: 3.9.4
