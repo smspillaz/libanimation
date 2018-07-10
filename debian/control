@@ -40,7 +40,7 @@ Depends: libwobbly0 (= ${binary:Version}),
 Description: Wobbly Mesh library (GLib API) headers
  Wobbly Mesh library (GLib API) headers
 
-Package: gir1.2-libwobbly-glib0
+Package: gir1.2-libwobbly-glib-0.3
 Section: non-free/libs
 Architecture: any
 Depends: ${gir:Depends},
