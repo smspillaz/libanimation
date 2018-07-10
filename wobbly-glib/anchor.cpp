@@ -74,6 +74,8 @@ wobbly_anchor_finalize (GObject *object)
   WobblyAnchor *anchor = WOBBLY_ANCHOR (object);
 
   wobbly_anchor_release (anchor);
+
+  G_OBJECT_CLASS (wobbly_anchor_parent_class)->finalize (object);
 }
 
 static void
