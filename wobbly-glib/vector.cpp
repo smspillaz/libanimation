@@ -23,4 +23,4 @@ wobbly_vector_copy (gpointer ptr)
 G_DEFINE_BOXED_TYPE (WobblyVector,
                      wobbly_vector,
                      wobbly_vector_copy,
-                     g_free);
+                     g_free)
