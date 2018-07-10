@@ -361,6 +361,8 @@ wobbly_model_constructed (GObject *object)
   WobblyModelPrivate *priv =
     reinterpret_cast <WobblyModelPrivate *> (wobbly_model_get_instance_private (model));
 
+  G_OBJECT_CLASS (wobbly_model_parent_class)->constructed (object);
+
   priv->model = new wobbly::Model (wobbly::Point (priv->prop_position.x,
                                                   priv->prop_position.y),
                                    priv->prop_size.x,
