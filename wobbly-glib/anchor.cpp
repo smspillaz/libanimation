@@ -25,7 +25,7 @@ typedef struct _WobblyAnchorPrivate
 
 G_DEFINE_TYPE_WITH_PRIVATE (WobblyAnchor,
                             wobbly_anchor,
-                            G_TYPE_OBJECT);
+                            G_TYPE_OBJECT)
 
 /**
  * wobbly_anchor_move_by:
