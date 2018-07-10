@@ -373,7 +373,6 @@ wobbly_model_init (WobblyModel *model)
 {
 }
 
-
 static void
 wobbly_model_class_init (WobblyModelClass *klass)
 {
