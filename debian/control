@@ -3,8 +3,8 @@ Priority: extra
 Maintainer: Sam Spilsbury <sam@endlessm.com>
 Build-Depends: debhelper (>= 8.0.0),
                cdbs,
-               cmake,
-               git
+               git,
+               meson
 Standards-Version: 3.9.4
 Section: libs
 Vcs-Git: git://github.com/smspillaz/libwobbly.git
