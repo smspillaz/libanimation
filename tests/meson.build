@@ -7,8 +7,8 @@
 wobbly_test_sources = [
   'anchor_test.cpp',
   'constrainment_test.cpp',
-  'glib_api_test.cpp',
   'euler_integration_test.cpp',
+  'glib_api_test.cpp',
   'mesh_interpolation_test.cpp',
   'model_test.cpp',
   'ostream_point_operator.h',
