@@ -24,14 +24,11 @@
 #include <type_traits>                  // for move, enable_if, etc
 #include <vector>                       // for vector
 
+#include <experimental/optional>        // for optional
+
 #include <assert.h>                     // for assert
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
-
-/* boost::optional supports references in optional <T> while xstd::optional
- * does not. xstd::optional supports move semantics. Use the latter unless
- * there is a usecase for the former */
-#include "third_party/allow_move_optional/optional.hpp"  // for optional
 
 #include <wobbly/geometry.h>                   // for PointView, PointModel, etc
 #include <wobbly/geometry_traits.h>            // for assign, scale, etc
@@ -140,7 +137,7 @@ namespace wobbly
         ClosestIndexToPosition (wobbly::MeshArray   &points,
                                 wobbly::Point const &pos)
         {
-            xstd::optional <size_t> nearestIndex;
+            std::experimental::optional <size_t> nearestIndex;
             double distance = std::numeric_limits <double>::max ();
 
             assert (points.size () == wobbly::config::ArraySize);
@@ -332,7 +329,7 @@ namespace wobbly
                     if (*largest > 0)
                         firstAnchor = std::distance (anchors.begin (), largest);
                     else
-                        firstAnchor.extract ();
+                        firstAnchor = std::experimental::nullopt;
                 }
             }
 
@@ -362,7 +359,7 @@ namespace wobbly
             TrackedAnchors & operator= (TrackedAnchors const &) = delete;
 
             std::array <unsigned int, N> anchors;
-            xstd::optional <size_t> firstAnchor;
+            std::experimental::optional <size_t> firstAnchor;
     };
 
     typedef TrackedAnchors <config::TotalIndices> AnchorArray;
