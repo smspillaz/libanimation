@@ -4,6 +4,7 @@ Maintainer: Sam Spilsbury <sam@endlessm.com>
 Build-Depends: debhelper (>= 8.0.0),
                cdbs,
                git,
+               gobject-introspection,
                libglib2.0-dev,
                meson
 Standards-Version: 3.9.4
