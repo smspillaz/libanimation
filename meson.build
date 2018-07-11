@@ -5,7 +5,7 @@
 # See /LICENCE.md for Copyright information.
 
 project('libwobbly', 'cpp',
-        version: '0.2.0',
+        version: '0.3.2',
         default_options : ['cpp_std=c++17'],
         license: 'LGPL2+',
         meson_version: '>= 0.40.0')
