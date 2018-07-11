@@ -1,9 +1,23 @@
 /*
  * wobbly-glib/wobbly.cpp
  *
- * GObject Interface for "wobbly" textures
+ * Copyright 2018 Endless Mobile, Inc.
  *
- * See LICENCE.md for Copyright information
+ * libwobbly is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 2.1 of the
+ * License, or (at your option) any later version.
+ *
+ * libwobbly is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with eos-companion-app-service.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
+ * GObject Interface for "wobbly" textures
  */
 
 #include <wobbly-glib/anchor.h>
@@ -23,11 +37,6 @@ typedef struct _WobblyModelPrivate
 {
   wobbly::Model::Settings  settings;
   wobbly::Model           *model;
-
-  /* We need to keep track of these during
-   * construction while model isn't set */
-  WobblyVector             prop_position;
-  WobblyVector             prop_size;
 } WobblyModelPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (WobblyModel,
@@ -208,8 +217,6 @@ wobbly_model_move_to (WobblyModel *model,
   WobblyModelPrivate *priv =
     reinterpret_cast <WobblyModelPrivate *> (wobbly_model_get_instance_private (model));
 
-  priv->prop_position = position;
-
   if (priv->model != nullptr)
     priv->model->MoveModelTo (wobbly::Point (position.x, position.y));
 }
@@ -228,9 +235,6 @@ wobbly_model_move_by (WobblyModel *model,
   WobblyModelPrivate *priv =
     reinterpret_cast <WobblyModelPrivate *> (wobbly_model_get_instance_private (model));
 
-  priv->prop_position.x += delta.x;
-  priv->prop_position.y += delta.y;
-
   if (priv->model != nullptr)
     priv->model->MoveModelBy (wobbly::Point (delta.x, delta.y));
 }
@@ -248,8 +252,6 @@ wobbly_model_resize (WobblyModel *model,
 {
   WobblyModelPrivate *priv =
     reinterpret_cast <WobblyModelPrivate *> (wobbly_model_get_instance_private (model));
-
-  priv->prop_size = size;
 
   if (priv->model != nullptr)
     priv->model->ResizeModel (size.x, size.y);
@@ -354,18 +356,41 @@ wobbly_model_finalize (GObject *object)
   G_OBJECT_CLASS (wobbly_model_parent_class)->finalize (object);
 }
 
-static void
-wobbly_model_constructed (GObject *object)
+static GObject *
+wobbly_model_constructor (GType                  type,
+                          guint                  n_construct_params,
+                          GObjectConstructParam *construct_params)
 {
+  GObject *object = G_OBJECT_CLASS (wobbly_model_parent_class)->constructor (type,
+                                                                             n_construct_params,
+                                                                             construct_params);
+
   WobblyModel *model = WOBBLY_MODEL (object);
   WobblyModelPrivate *priv =
     reinterpret_cast <WobblyModelPrivate *> (wobbly_model_get_instance_private (model));
 
-  priv->model = new wobbly::Model (wobbly::Point (priv->prop_position.x,
-                                                  priv->prop_position.y),
-                                   priv->prop_size.x,
-                                   priv->prop_size.y,
+  WobblyVector prop_position = { 0, 0 };
+  WobblyVector prop_size = { 1, 1 };
+
+  for (size_t i = 0; i < n_construct_params; ++i)
+    {
+      GParamSpec *pspec = construct_params[i].pspec;
+      GValue     *value = construct_params[i].value;
+
+      if (g_strcmp0 (pspec->name, "position") == 0)
+        prop_position = *(reinterpret_cast <WobblyVector *> (g_value_get_boxed (value)));
+
+      if (g_strcmp0 (pspec->name, "size") == 0)
+        prop_size = *(reinterpret_cast <WobblyVector *> (g_value_get_boxed (value)));
+    }
+
+  priv->model = new wobbly::Model (wobbly::Point (prop_position.x,
+                                                  prop_position.y),
+                                   prop_size.x,
+                                   prop_size.y,
                                    priv->settings);
+
+  return object;
 }
 
 static void
@@ -373,13 +398,12 @@ wobbly_model_init (WobblyModel *model)
 {
 }
 
-
 static void
 wobbly_model_class_init (WobblyModelClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = wobbly_model_constructed;
+  object_class->constructor = wobbly_model_constructor;
   object_class->get_property = wobbly_model_get_property;
   object_class->set_property = wobbly_model_set_property;
   object_class->finalize = wobbly_model_finalize;

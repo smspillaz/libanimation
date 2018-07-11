@@ -1,6 +1,22 @@
 /*
  * include/wobbly_internal.h
  *
+ * Copyright 2018 Endless Mobile, Inc.
+ *
+ * libwobbly is free software: you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 2.1 of the
+ * License, or (at your option) any later version.
+ *
+ * libwobbly is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with eos-companion-app-service.  If not, see
+ * <http://www.gnu.org/licenses/>.
+ *
  * Internal class definitions and inline functions for wobbly mesh. These
  * functions need to be declared in a header which is included wherever they
  * are used so that they can be inlined correctly.
@@ -8,8 +24,6 @@
  * Implicitly depends on:
  *  - std::function
  *  - std::array
- *
- * See LICENCE.md for Copyright information
  */
 #ifndef WOBBLY_INTERNAL_H
 #define WOBBLY_INTERNAL_H
@@ -24,14 +38,11 @@
 #include <type_traits>                  // for move, enable_if, etc
 #include <vector>                       // for vector
 
+#include <experimental/optional>        // for optional
+
 #include <assert.h>                     // for assert
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
-
-/* boost::optional supports references in optional <T> while xstd::optional
- * does not. xstd::optional supports move semantics. Use the latter unless
- * there is a usecase for the former */
-#include "third_party/allow_move_optional/optional.hpp"  // for optional
 
 #include <wobbly/geometry.h>                   // for PointView, PointModel, etc
 #include <wobbly/geometry_traits.h>            // for assign, scale, etc
@@ -140,7 +151,7 @@ namespace wobbly
         ClosestIndexToPosition (wobbly::MeshArray   &points,
                                 wobbly::Point const &pos)
         {
-            xstd::optional <size_t> nearestIndex;
+            std::experimental::optional <size_t> nearestIndex;
             double distance = std::numeric_limits <double>::max ();
 
             assert (points.size () == wobbly::config::ArraySize);
@@ -332,7 +343,7 @@ namespace wobbly
                     if (*largest > 0)
                         firstAnchor = std::distance (anchors.begin (), largest);
                     else
-                        firstAnchor.extract ();
+                        firstAnchor = std::experimental::nullopt;
                 }
             }
 
@@ -362,7 +373,7 @@ namespace wobbly
             TrackedAnchors & operator= (TrackedAnchors const &) = delete;
 
             std::array <unsigned int, N> anchors;
-            xstd::optional <size_t> firstAnchor;
+            std::experimental::optional <size_t> firstAnchor;
     };
 
     typedef TrackedAnchors <config::TotalIndices> AnchorArray;

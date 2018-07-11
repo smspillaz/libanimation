@@ -1,3 +1,18 @@
+libwobbly (0.3.2) eos; urgency=medium
+
+  * debian/control:
+    - Rename gir1.2-wobbly-glib0 to gir1.2-wobbly-glib-0.3
+  * libwobbly-dev:
+    - Install the unversioned library
+  * libwobbly0:
+    - Install the soversioned library
+  * libwobbly-glib-dev
+    - Install the unversioned library
+  * libwobbly-glib0:
+    - Install the so versioned library
+
+ -- Sam Spilsbury <sam@endlessm.com>  Tue, 10 Jul 2018 23:30:51 +0800
+
 libwobbly (0.3.1) eos; urgency=medium
 
   * wobbly-glib: Add wobbly-glib library

@@ -1,2 +1,3 @@
 usr/include/wobbly/*
+usr/lib/*/libwindowfx_wobbly.so
 usr/lib/*/pkgconfig/libwindowfx_wobbly-0.3.pc

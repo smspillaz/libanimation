@@ -19,7 +19,7 @@ typedef struct {
 
 #define WOBBLY_TYPE_VECTOR wobbly_vector_get_type ()
 
-GType wobbly_vector_get_type ();
+GType wobbly_vector_get_type (void);
 
 G_END_DECLS
 
