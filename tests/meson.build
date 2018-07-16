@@ -37,9 +37,9 @@ wobbly_test_executable = executable(
   'windowfx_wobbly_test',
   wobbly_test_sources,
   dependencies: [
-    gtest_project.get_variable('gtest_main_dep'),
-    gtest_project.get_variable('gtest_dep'),
-    gtest_project.get_variable('gmock_dep'),
+    gtest_dep,
+    gtest_main_dep,
+    gmock_dep,
     glib,
     gobject,
     mathematical_model_matcher_dep,

@@ -29,8 +29,8 @@ mathematical_model_matcher_lib = static_library(
   'mathematical_model_matcher',
   mathematical_model_matcher_sources,
   dependencies: [
-    gtest_project.get_variable('gtest_dep'),
-    gtest_project.get_variable('gmock_dep'),
+    gtest_dep,
+    gmock_dep,
     wobbly_dep
   ],
   install: false
@@ -50,8 +50,8 @@ within_geometry_matcher_lib = static_library(
   'within_geometry_matcher',
   within_geometry_matcher_sources,
   dependencies: [
-    gtest_project.get_variable('gtest_dep'),
-    gtest_project.get_variable('gmock_dep'),
+    gtest_dep,
+    gmock_dep,
     wobbly_dep
   ],
   install: false
