@@ -43,7 +43,7 @@ Package: libwobbly-glib-dev
 Section: libdevel
 Architecture: any
 Depends: ${misc:Depends},
-         libwobbly0-glib (= ${binary:Version}),
+         libwobbly-glib0 (= ${binary:Version}),
          gir1.2-libwobbly-glib-0.3 (= ${binary:Version})
 Description: Wobbly Mesh library (GLib API) headers
  Wobbly Mesh library (GLib API) headers
