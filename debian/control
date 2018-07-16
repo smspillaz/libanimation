@@ -5,8 +5,11 @@ Build-Depends: debhelper (>= 8.0.0),
                cdbs,
                git,
                gobject-introspection,
+               googletest,
+               google-mock,
                libgirepository1.0-dev,
                libglib2.0-dev,
+               libgtest-dev,
                meson
 Standards-Version: 3.9.4
 Section: libs
