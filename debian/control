@@ -25,14 +25,17 @@ Description: Wobbly Mesh Library (C++ API) headers
 Package: libwobbly0
 Section: libs
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
 Description: Wobbly Mesh library (C++ API)
  Wobbly Mesh
 
 Package: libwobbly-glib0
 Section: libs
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}, libwobbly0 (= ${binary:Version})
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         libwobbly0 (= ${binary:Version})
 Description: Wobbly Mesh library (GLib API)
  Wobbly Mesh (GLib API)
 
