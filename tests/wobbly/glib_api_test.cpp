@@ -24,9 +24,9 @@
 #include <iosfwd>                       // for ostream
 #include <ostream>                      // for basic_ostream, char_traits, etc
 
+#include <animation-glib/vector.h>
 #include <animation-glib/wobbly/anchor.h>
 #include <animation-glib/wobbly/model.h>
-#include <animation-glib/wobbly/vector.h>
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
 #include <within_geometry_matcher.h>     // for WithinGeometry, etc

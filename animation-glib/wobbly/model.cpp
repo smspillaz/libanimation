@@ -22,7 +22,7 @@
 
 #include <animation-glib/wobbly/anchor.h>
 #include <animation-glib/wobbly/model.h>
-#include <animation-glib/wobbly/vector.h>
+#include <animation-glib/vector.h>
 
 #include <animation/wobbly/wobbly.h>
 

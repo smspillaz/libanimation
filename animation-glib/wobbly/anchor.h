@@ -29,7 +29,7 @@
 
 #include <glib-object.h>
 
-#include <animation-glib/wobbly/vector.h>
+#include <animation-glib/vector.h>
 
 G_BEGIN_DECLS
 
