@@ -6,14 +6,12 @@
 
 wobbly_introspectable_sources = [
   'anchor.cpp',
-  'model.cpp',
-  'vector.cpp'
+  'model.cpp'
 ]
 wobbly_private_sources = ['wobbly-anchor-private.h']
 wobbly_headers = [
   'anchor.h',
-  'model.h',
-  'vector.h'
+  'model.h'
 ]
 
 animation_glib_introspectable_sources += files(wobbly_introspectable_sources)
