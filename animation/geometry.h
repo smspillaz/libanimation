@@ -315,9 +315,9 @@ namespace animation
         {
             public:
 
-                Box (T const &tr, T const &bl) :
-                    tr (tr),
-                    bl (bl)
+                Box (T const &tl, T const &br) :
+                    tl (tl),
+                    br (br)
                 {
                 }
 
@@ -327,8 +327,8 @@ namespace animation
                 template <typename V>
                 void apply_visitor (V &&visitor) const
                 {
-                    visitor (tr);
-                    visitor (bl);
+                    visitor (tl);
+                    visitor (br);
                 }
 
                 template <typename V>
@@ -337,20 +337,30 @@ namespace animation
                     (const_cast <Box const &> (*this))->apply_visitor (visitor);
                 }
 
+                T const & topLeft () const
+                {
+                    return tl;
+                }
+
+                T const & bottomRight () const
+                {
+                    return br;
+                }
+
             private:
 
-                T tr;
-                T bl;
+                T tl;
+                T br;
         };
 
         template <typename T>
         template <typename U>
         bool Box <T>::contains (U const &p) const
         {
-            auto const x1 = dimension::get <0> (tr);
-            auto const x2 = dimension::get <0> (bl);
-            auto const y1 = dimension::get <1> (tr);
-            auto const y2 = dimension::get <1> (bl);
+            auto const x1 = dimension::get <0> (tl);
+            auto const x2 = dimension::get <0> (br);
+            auto const y1 = dimension::get <1> (tl);
+            auto const y2 = dimension::get <1> (br);
 
             return (dimension::get <0> (p) >= x1 &&
                     dimension::get <0> (p) <= x2 &&
