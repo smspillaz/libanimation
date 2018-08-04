@@ -1,0 +1,3 @@
+[submodule "animation/third_party/glm"]
+	path = animation/third_party/glm
+	url = git://github.com/g-truc/glm

@@ -47,7 +47,7 @@ animation_test_executable = executable(
     animation_dep,
     animation_glib_dep
   ],
-  include_directories: [ tests_inc ]
+  include_directories: [ glm_inc, tests_inc ]
 )
 
 test('animation_test', animation_test_executable)

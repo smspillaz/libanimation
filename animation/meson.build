@@ -31,7 +31,7 @@ animation_lib = shared_library(
   animation_sources,
   soversion: api_version,
   install: true,
-  include_directories: [ animation_inc ]
+  include_directories: [ animation_inc, glm_inc ]
 )
 
 animation_dep = declare_dependency(
