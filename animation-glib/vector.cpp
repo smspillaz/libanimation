@@ -1,5 +1,5 @@
 /*
- * animation-glib/wobbly/vector.h
+ * animation-glib/vector.cpp
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
@@ -17,24 +17,24 @@
  * License along with eos-companion-app-service.  If not, see
  * <http://www.gnu.org/licenses/>.
  *
- * GObject Interface for "wobbly" textures, 2D vector type.
+ * GObject Interface for "wobbly" textures, vector
+ * type implementation.
  */
-#ifndef WOBBLY_GLIB_VECTOR_H
-#define WOBBLY_GLIB_VECTOR_H
 
-#include <glib-object.h>
+#include <animation-glib/vector.h>
 
-G_BEGIN_DECLS
+static gpointer
+animation_vector_copy (gpointer ptr)
+{
+  AnimationVector *src = reinterpret_cast <AnimationVector *> (ptr);
+  AnimationVector *dst = g_new0 (AnimationVector, 1);
 
-typedef struct {
-  double x;
-  double y;
-} AnimationVector;
+  *dst = *src;
 
-#define ANIMATION_TYPE_VECTOR animation_vector_get_type ()
+  return reinterpret_cast <gpointer> (dst);
+}
 
-GType animation_vector_get_type (void);
-
-G_END_DECLS
-
-#endif
+G_DEFINE_BOXED_TYPE (AnimationVector,
+                     animation_vector,
+                     animation_vector_copy,
+                     g_free);

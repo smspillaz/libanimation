@@ -20,6 +20,9 @@
 
 api_version = '0'
 
+animation_glib_toplevel_headers = ['vector.h']
+animation_glib_toplevel_introspectable_sources = ['vector.cpp']
+
 animation_glib_introspectable_sources = []
 animation_glib_private_sources = []
 animation_glib_headers = []
@@ -27,8 +30,10 @@ animation_glib_headers_subdir = 'animation-glib'
 
 subdir('wobbly')
 
-animation_glib_introspectable_sources += files(animation_glib_toplevel_sources)
+animation_glib_introspectable_sources += files(animation_glib_toplevel_introspectable_sources)
 animation_glib_headers += files(animation_glib_toplevel_headers)
+
+install_headers(animation_glib_toplevel_headers, subdir: animation_glib_headers_subdir)
 
 animation_glib_sources = animation_glib_introspectable_sources + animation_glib_private_sources
 
