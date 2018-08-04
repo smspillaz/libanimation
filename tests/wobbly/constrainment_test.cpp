@@ -49,7 +49,7 @@ using ::wobbly::matchers::Eq;
 
 namespace
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     double TileWidth (double width)
     {
@@ -75,19 +75,19 @@ namespace
         {
             for (unsigned int j = 0; j < meshWidth; ++j)
             {
-                wobbly::PointView <double> pv (positions,
-                                               i * meshWidth + j);
-                wgd::assign (pv,
-                             wobbly::Point (tileWidth * j,
-                                            tileHeight * i));
+                animation::PointView <double> pv (positions,
+                                                  i * meshWidth + j);
+                agd::assign (pv,
+                             animation::Point (tileWidth * j,
+                                               tileHeight * i));
             }
         }
     }
 
     constexpr double TextureWidth = 50.0f;
     constexpr double TextureHeight = 100.0f;
-    wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
-                                                       TextureHeight / 2);
+    animation::Point const TextureCenter = animation::Point (TextureWidth / 2,
+                                                             TextureHeight / 2);
 
     class ConstrainmentStep :
         public Test
@@ -138,8 +138,8 @@ namespace
     TEST_F (ConstrainmentStep, ReturnsTrueWhereConstrainmentTookPlace)
     {
         auto handleOwner (targets.Activate ());
-        wobbly::PointView <double> pv (positions, 1);
-        wgd::pointwise_add (pv, wobbly::Point (range * 2, range * 2));
+        animation::PointView <double> pv (positions, 1);
+        agd::pointwise_add (pv, animation::Point (range * 2, range * 2));
 
         EXPECT_TRUE (constrainment (positions, anchors));
     }
@@ -147,17 +147,17 @@ namespace
     TEST_F (ConstrainmentStep, ReturnsFalseWhereNoConstrainmentTookPlace)
     {
         auto handleOwner (targets.Activate ());
-        wobbly::PointView <double> pv (positions, 1);
+        animation::PointView <double> pv (positions, 1);
 
         /* Not enough to cause constrainment */
-        wgd::pointwise_add (pv, wobbly::Point (range / 2, 0));
+        agd::pointwise_add (pv, animation::Point (range / 2, 0));
 
         EXPECT_FALSE (constrainment (positions, anchors));
     }
 
     TEST_F (ConstrainmentStep, ConstrainedToPointsOnTargetMesh)
     {
-        wobbly::Point const movement (range * 2, 0);
+        animation::Point const movement (range * 2, 0);
         auto handleOwner (targets.Activate ());
         wobbly::MoveOnly <wobbly::TargetMesh::Move> &handleWrap (handleOwner);
         wobbly::TargetMesh::Move const &moveBy (handleWrap);
@@ -177,8 +177,8 @@ namespace
         /* Add range.x to each point */
         for (size_t i = 0; i < positions.size () / 2; ++i)
         {
-            wobbly::PointView <double> pv (expectedPositions, i);
-            wgd::pointwise_add (pv, wobbly::Point (range, 0));
+            animation::PointView <double> pv (expectedPositions, i);
+            agd::pointwise_add (pv, animation::Point (range, 0));
         }
 
         std::vector <Matcher <double>> matchers;
@@ -219,15 +219,15 @@ namespace
         double const sign = ratio / (absratio + (absratio == 0.0));
         double const radiusInRange = range - (range / 2);
 
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
+        animation::PointView <double> pv (positions, index);
+        animation::Point expected;
 
-        wgd::pointwise_add (pv,
-                            wobbly::Point (radiusInRange * ratio,
-                                           radiusInRange * (1 - absratio) * sign));
+        agd::pointwise_add (pv,
+                            animation::Point (radiusInRange * ratio,
+                                              radiusInRange * (1 - absratio) * sign));
 
         /* Expected point is the modified point here, before constrainment */
-        wgd::pointwise_add (expected, pv);
+        agd::pointwise_add (expected, pv);
 
         constrainment (positions, anchors);
 
@@ -242,53 +242,53 @@ namespace
         double const sign = ratio / (absratio + (absratio == 0.0));
         double const radiusOutOfRange = range * range;
 
-        wobbly::Point outOfRange (radiusOutOfRange * ratio,
-                                  radiusOutOfRange * (1 - absratio) * sign);
-        wobbly::Point inRange (range * ratio,
-                               range * (1 - absratio) * sign);
+        animation::Point outOfRange (radiusOutOfRange * ratio,
+                                     radiusOutOfRange * (1 - absratio) * sign);
+        animation::Point inRange (range * ratio,
+                                  range * (1 - absratio) * sign);
 
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
+        animation::PointView <double> pv (positions, index);
+        animation::Point expected;
 
         /* Expected point is the actual grid point, but at its maximum range */
-        wgd::assign (expected, pv);
-        wgd::pointwise_add (expected, inRange);
+        agd::assign (expected, pv);
+        agd::pointwise_add (expected, inRange);
 
-        wgd::pointwise_add (pv, outOfRange);
+        agd::pointwise_add (pv, outOfRange);
         constrainment (positions, anchors);
 
         EXPECT_THAT (pv, Eq (expected));
     }
 
-    void ScalePositionMesh (wobbly::MeshArray &array,
-                            wobbly::Point const &origin,
-                            wobbly::Vector const &scaleFactor)
+    void ScalePositionMesh (wobbly::MeshArray       &array,
+                            animation::Point const  &origin,
+                            animation::Vector const &scaleFactor)
     {
         for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
         {
-            wobbly::PointView <double> p (array, i);
-            wgd::pointwise_subtract (p, origin);
-            wgd::pointwise_scale (p, scaleFactor);
-            wgd::pointwise_add (p, origin);
+            animation::PointView <double> p (array, i);
+            agd::pointwise_subtract (p, origin);
+            agd::pointwise_scale (p, scaleFactor);
+            agd::pointwise_add (p, origin);
         }
     }
 
     TEST_P (ConstrainmentStepPositions, NotAffectedWhereBothMeshesResizeEvenly)
     {
-        wobbly::Vector scaleFactor (range * 4, range * 4);
+        animation::Vector scaleFactor (range * 4, range * 4);
         ScalePositionMesh (positions,
-                           wobbly::Point (positions[0], positions[1]),
+                           animation::Point (positions[0], positions[1]),
                            scaleFactor);
         ScalePositionMesh (targets.PointArray (),
-                           wobbly::Point (targets.PointArray ()[0],
-                                          targets.PointArray ()[1]),
+                           animation::Point (targets.PointArray ()[0],
+                                             targets.PointArray ()[1]),
                            scaleFactor);
 
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
+        animation::PointView <double> pv (positions, index);
+        animation::Point expected;
 
         /* Expected point is the same point here, before constrainment */
-        wgd::assign (expected, pv);
+        agd::assign (expected, pv);
 
         constrainment (positions, anchors);
 
@@ -297,17 +297,17 @@ namespace
 
     TEST_P (ConstrainmentStepPositions, AffectedWhereBothMeshesResizeUnevenly)
     {
-        wobbly::Vector scaleFactor (range * 4, range * 4);
+        animation::Vector scaleFactor (range * 4, range * 4);
         ScalePositionMesh (positions,
-                           wobbly::Point (wobbly::config::Width / 2,
-                                          wobbly::config::Height / 2),
+                           animation::Point (wobbly::config::Width / 2,
+                                             wobbly::config::Height / 2),
                            scaleFactor);
 
-        wobbly::PointView <double> pv (positions, index);
-        wobbly::Point expected;
+        animation::PointView <double> pv (positions, index);
+        animation::Point expected;
 
         /* Not expecting the same point before constrainment */
-        wgd::assign (expected, pv);
+        agd::assign (expected, pv);
 
         constrainment (positions, anchors);
 

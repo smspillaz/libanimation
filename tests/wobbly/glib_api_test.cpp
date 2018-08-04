@@ -63,7 +63,7 @@ operator<< (std::ostream &lhs, AnimationVector const &v)
                << v.y;
 }
 
-namespace wobbly
+namespace animation
 {
     namespace geometry
     {
@@ -149,7 +149,7 @@ namespace
                                                                std::forward <Visitor> (visitor));
     }
 
-    typedef wobbly::Box <wobbly::Point> PointBox;
+    typedef animation::Box <animation::Point> PointBox;
 
     TEST (WobblyGLibAPI, ConstructModel)
     {
@@ -379,10 +379,10 @@ namespace
         array_map_into (textureEdges,
                         expected,
                         [](auto const &vector) -> decltype(auto) {
-                            return WithinGeometry (PointBox (wobbly::Point (vector.x - 3.0,
-                                                                            vector.y - 3.0),
-                                                             wobbly::Point (vector.x + 3.0,
-                                                                            vector.y + 3.0)));
+                            return WithinGeometry (PointBox (animation::Point (vector.x - 3.0,
+                                                                               vector.y - 3.0),
+                                                             animation::Point (vector.x + 3.0,
+                                                                               vector.y + 3.0)));
                         });
 
         EXPECT_THAT (extremes, ElementsAreArray(textureEdges)); 

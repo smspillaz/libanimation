@@ -37,7 +37,7 @@ namespace wobbly
     namespace matchers
     {
         namespace t = ::testing;
-        namespace wgd = ::wobbly::geometry::dimension;
+        namespace agd = ::animation::geometry::dimension;
 
         template <typename ParentGeometry>
         class WithinGeometryMatcher
@@ -73,7 +73,7 @@ namespace wobbly
                 void Describe (std::ostream &os) const
                 {
                     os << " within :" << std::endl;
-                    wgd::for_each_point (parent, [&os](auto const &p) {
+                    agd::for_each_point (parent, [&os](auto const &p) {
                         os << " - " << p << std::endl;
                     });
                 }

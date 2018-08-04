@@ -56,12 +56,12 @@ using ::wobbly::models::Linear;
 
 namespace
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     constexpr double TextureWidth = 50.0f;
     constexpr double TextureHeight = 100.0f;
-    wobbly::Point const TextureCenter = wobbly::Point (TextureWidth / 2,
-                                                       TextureHeight / 2);
+    animation::Point const TextureCenter = animation::Point (TextureWidth / 2,
+                                                             TextureHeight / 2);
 
     double TileWidth (double width)
     {
@@ -87,10 +87,10 @@ namespace
         {
             for (unsigned int j = 0; j < meshWidth; ++j)
             {
-                wobbly::PointView <double> pv (positions,
-                                               i * meshWidth + j);
-                wgd::assign (pv, wobbly::Point (tileWidth * j,
-                                                tileHeight * i));
+                animation::PointView <double> pv (positions,
+                                                  i * meshWidth + j);
+                agd::assign (pv, animation::Point (tileWidth * j,
+                                                   tileHeight * i));
             }
         }
     }
@@ -104,9 +104,9 @@ namespace
 
         protected:
 
-            typedef wobbly::Point Point;
+            typedef animation::Point Point;
 
-            typedef std::function <void (wobbly::PointView <double> &,
+            typedef std::function <void (animation::PointView <double> &,
                                          size_t,
                                          size_t)> MeshTransform;
             typedef std::function <double (Point const &)> ResultFactory;
@@ -153,8 +153,8 @@ namespace
 
                 double const unitLookupValue =
                     lookupValue / static_cast <double> (pow (2, nSamples));
-                auto const lookup (wobbly::Point (unitLookupValue,
-                                                  unitLookupValue));
+                auto const lookup (animation::Point (unitLookupValue,
+                                                     unitLookupValue));
                 auto p (mesh.DeformUnitCoordsToMeshSpace (lookup));
 
                 return result (p);
@@ -167,14 +167,14 @@ namespace
     {
         using namespace std::placeholders;
 
-        ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            wgd::scale (pv, 2);
+        ApplyTransformation (std::bind ([](animation::PointView <double> &pv) {
+            agd::scale (pv, 2);
         }, _1));
 
         unsigned int const nSamples = 10;
         std::function <double (int)> horizontalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return wgd::get <0> (p);
+            UnitDeformationFunction ([](animation::Point const &p) -> double {
+                                        return agd::get <0> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -189,14 +189,14 @@ namespace
     {
         using namespace std::placeholders;
 
-        ApplyTransformation (std::bind ([](wobbly::PointView <double> &pv) {
-            wgd::scale (pv, 2);
+        ApplyTransformation (std::bind ([](animation::PointView <double> &pv) {
+            agd::scale (pv, 2);
         }, _1));
 
         unsigned int const nSamples = 10;
         std::function <double (int)> verticalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                        return wgd::get <1> (p);
+            UnitDeformationFunction ([](animation::Point const &p) -> double {
+                                        return agd::get <1> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -215,16 +215,16 @@ namespace
     {
         using namespace std::placeholders;
 
-        typedef wobbly::PointView <double> DoublePointView;
+        typedef animation::PointView <double> DoublePointView;
 
         ApplyTransformation ([](DoublePointView &pv, size_t x, size_t y) {
-             wgd::pointwise_scale (pv, wobbly::Point (x, y));
+             agd::pointwise_scale (pv, animation::Point (x, y));
         });
 
         unsigned int const nSamples = 10;
         std::function <double (int)> horizontalDeformation =
-            UnitDeformationFunction ([](wobbly::Point const &p) -> double {
-                                         return wgd::get <0> (p);
+            UnitDeformationFunction ([](animation::Point const &p) -> double {
+                                         return agd::get <0> (p);
                                      },
                                      mesh,
                                      nSamples);
@@ -237,13 +237,13 @@ namespace
 
     TEST_F (BezierMesh, ExtremesAreTextureEdges)
     {
-        std::array <wobbly::Point, 4> const extremes = mesh.Extremes ();
-        Matcher <wobbly::Point const &> const textureEdges[] =
+        std::array <animation::Point, 4> const extremes = mesh.Extremes ();
+        Matcher <animation::Point const &> const textureEdges[] =
         {
-            Eq (wobbly::Point (0, 0)),
-            Eq (wobbly::Point (TextureWidth, 0)),
-            Eq (wobbly::Point (0, TextureHeight)),
-            Eq (wobbly::Point (TextureWidth, TextureHeight))
+            Eq (animation::Point (0, 0)),
+            Eq (animation::Point (TextureWidth, 0)),
+            Eq (animation::Point (0, TextureHeight)),
+            Eq (animation::Point (TextureWidth, TextureHeight))
         };
 
         EXPECT_THAT (extremes, ElementsAreArray (textureEdges));
@@ -252,32 +252,32 @@ namespace
     template <typename Point>
     void PointCeiling (Point &p)
     {
-        wgd::for_each_coordinate (p, [](auto const &coord) -> decltype(auto) {
+        agd::for_each_coordinate (p, [](auto const &coord) -> decltype(auto) {
             return std::ceil (coord);
         });
     }
 
     class BezierMeshPoints :
         public BezierMesh,
-        public WithParamInterface <wobbly::Point>
+        public WithParamInterface <animation::Point>
     {
     };
 
-    wobbly::Point TexturePrediction (wobbly::Point const &unit)
+    animation::Point TexturePrediction (animation::Point const &unit)
     {
-        wobbly::Point textureRelative (wgd::get <1> (unit),
-                                       wgd::get <0> (unit));
-        wgd::pointwise_scale (textureRelative,
-                              wobbly::Point (TextureWidth,
-                                             TextureHeight));
+        animation::Point textureRelative (agd::get <1> (unit),
+                                          agd::get <0> (unit));
+        agd::pointwise_scale (textureRelative,
+                              animation::Point (TextureWidth,
+                                                TextureHeight));
         PointCeiling (textureRelative);
         return textureRelative;
     }
 
-    wobbly::Point MeshInterpolation (wobbly::BezierMesh const &mesh,
-                                     wobbly::Point const &unit)
+    animation::Point MeshInterpolation (wobbly::BezierMesh const &mesh,
+                                        animation::Point const &unit)
     {
-        wobbly::Point meshRelative (mesh.DeformUnitCoordsToMeshSpace (unit));
+        animation::Point meshRelative (mesh.DeformUnitCoordsToMeshSpace (unit));
         PointCeiling (meshRelative);
         return meshRelative;
     }
@@ -291,12 +291,12 @@ namespace
         EXPECT_THAT (interpolated, Eq (prediction));
     }
 
-    wobbly::Point const unitMeshExtremes[] =
+    animation::Point const unitMeshExtremes[] =
     {
-        wobbly::Point (0.0, 0.0),
-        wobbly::Point (0.0, 1.0),
-        wobbly::Point (1.0, 0.0),
-        wobbly::Point (1.0, 1.0)
+        animation::Point (0.0, 0.0),
+        animation::Point (0.0, 1.0),
+        animation::Point (1.0, 0.0),
+        animation::Point (1.0, 1.0)
     };
 
     INSTANTIATE_TEST_CASE_P (UnitExtremes,

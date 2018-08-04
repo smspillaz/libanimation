@@ -23,9 +23,9 @@
 #ifndef WOBBLY_GEOMETRY_H
 #define WOBBLY_GEOMETRY_H
 
-#include <animation/wobbly/geometry_traits.h>
+#include <animation/geometry_traits.h>
 
-namespace wobbly
+namespace animation
 {
     namespace geometry
     {
@@ -71,7 +71,7 @@ namespace wobbly
          * at the same time.
          *
          * PointView implements the Dimension trait, meaning that it
-         * can be used with functions in the wobbly::geometry::dimension
+         * can be used with functions in the animation::geometry::dimension
          * namespace.
          */ 
         template <typename NumericType>
@@ -186,7 +186,7 @@ namespace wobbly
 
         namespace dimension
         {
-            /* Overloads for wobbly::PointView */
+            /* Overloads for animation::PointView */
             template <typename U>
             struct Dimension <PointView <U> >
             {
@@ -217,7 +217,7 @@ namespace wobbly
          * type T. This is a structure of two values.
          *
          * PointModel implements the Dimension trait, meaning that it
-         * can be used with functions in the wobbly::geometry::dimension
+         * can be used with functions in the animation::geometry::dimension
          * namespace.
          */
         template <typename T>
@@ -359,6 +359,20 @@ namespace wobbly
                     dimension::get <1> (p) <= y2);
         }
     }
+
+    /* Import animation::geometry::Point types into
+     * animation namespace for compatibility. */
+    typedef animation::geometry::Point Point;
+    typedef animation::geometry::Vector Vector;
+
+    template <typename NumericType>
+    using PointView = animation::geometry::PointView <NumericType>;
+
+    template <typename NumericType>
+    using PointModel = animation::geometry::PointModel <NumericType>;
+
+    template <typename PointType>
+    using Box = animation::geometry::Box <PointType>;
 }
 
 #endif

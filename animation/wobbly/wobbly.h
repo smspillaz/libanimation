@@ -33,8 +33,8 @@
 #include <type_traits>
 #include <vector>
 
-#include <animation/wobbly/geometry.h>
-#include <animation/wobbly/geometry_traits.h>
+#include <animation/geometry.h>
+#include <animation/geometry_traits.h>
 
 /* std::swap is explicitly specialized for numerous other types we don't care
  * about */
@@ -59,17 +59,17 @@ namespace wobbly
 {
     /* Import wobbly::geometry::Point types into
      * wobbly namespace for compatibility. */
-    typedef wobbly::geometry::Point Point;
-    typedef wobbly::geometry::Vector Vector;
+    typedef animation::geometry::Point Point;
+    typedef animation::geometry::Vector Vector;
 
     template <typename NumericType>
-    using PointView = wobbly::geometry::PointView <NumericType>;
+    using PointView = animation::geometry::PointView <NumericType>;
 
     template <typename NumericType>
-    using PointModel = wobbly::geometry::PointModel <NumericType>;
+    using PointModel = animation::geometry::PointModel <NumericType>;
 
     template <typename PointType>
-    using Box = wobbly::geometry::Box <PointType>;
+    using Box = animation::geometry::Box <PointType>;
 
     class Anchor
     {
