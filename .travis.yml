@@ -10,5 +10,5 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo RUN apt-get update >> Dockerfile; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then echo RUN apt-get install -y meson ninja-build build-essential git pkg-config libglib2.0-dev gir1.2-glib-2.0 gobject-introspection libgirepository1.0-dev >> Dockerfile; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker build -t withgit .; fi
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker run withgit /bin/sh -c "cd /root && TRAVIS=true CC=$CC CXX=$CXX meson -Db_sanitize=address,undefined -Dwerror=true builddir && ninja -C builddir && G_SLICE=always-malloc ./builddir/tests/windowfx_wobbly_test --gtest_color=yes"; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker run withgit /bin/sh -c "cd /root && TRAVIS=true CC=$CC CXX=$CXX meson -Db_sanitize=address,undefined -Dwerror=true builddir && ninja -C builddir && G_SLICE=always-malloc ./builddir/tests/animation_test --gtest_color=yes"; fi
 
