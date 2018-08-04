@@ -47,7 +47,7 @@
 
 #include <gmock/gmock.h>       // IWYU pragma: keep
 
-namespace wobbly
+namespace animation
 {
     namespace models
     {
@@ -486,13 +486,13 @@ namespace wobbly
                         /* If we are comparing to zero, then use
                          * check_is_small as opposed to check_is_close */
                         if (agd::get <D> (rhs) == 0.0)
-                            result = wobbly::testing::is_small (agd::get <D> (lhs),
-                                                                epsilon);
+                            result = animation::testing::is_small (agd::get <D> (lhs),
+                                                                   epsilon);
                         else
                         {
-                            result = wobbly::testing::close_at_tolerance <LT> (agd::get <D> (lhs),
-                                                                               agd::get <D> (rhs),
-                                                                               epsilon);
+                            result = animation::testing::close_at_tolerance <LT> (agd::get <D> (lhs),
+                                                                                  agd::get <D> (rhs),
+                                                                                  epsilon);
                         }
 
                         return result &&
@@ -710,9 +710,9 @@ namespace wobbly
                                 << std::endl;
 
                         /* Close to specified tolerance */
-                        if (!wobbly::testing::close_at_tolerance (modelPrediction,
-                                                                  actual,
-                                                                  mTolerance))
+                        if (!animation::testing::close_at_tolerance (modelPrediction,
+                                                                     actual,
+                                                                     mTolerance))
                         {
                             if (os)
                                 *os << " (exceeding tolerance: "

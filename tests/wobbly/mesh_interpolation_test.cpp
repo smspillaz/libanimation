@@ -47,12 +47,12 @@ using ::testing::Test;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
-using ::wobbly::matchers::Eq;
-using ::wobbly::matchers::SatisfiesModel;
-using ::wobbly::matchers::WithSamples;
-using ::wobbly::matchers::WithTolerance;
+using ::animation::matchers::Eq;
+using ::animation::matchers::SatisfiesModel;
+using ::animation::matchers::WithSamples;
+using ::animation::matchers::WithTolerance;
 
-using ::wobbly::models::Linear;
+using ::animation::models::Linear;
 
 namespace
 {

@@ -38,13 +38,13 @@
 
 using ::testing::Test;
 
-using ::wobbly::matchers::Eq;
-using ::wobbly::matchers::SatisfiesModel;
-using ::wobbly::matchers::WithSamples;
-using ::wobbly::matchers::WithTolerance;
+using ::animation::matchers::Eq;
+using ::animation::matchers::SatisfiesModel;
+using ::animation::matchers::WithSamples;
+using ::animation::matchers::WithTolerance;
 
-using ::wobbly::models::Linear;
-using ::wobbly::models::Parabolic;
+using ::animation::models::Linear;
+using ::animation::models::Parabolic;
 
 namespace
 {
