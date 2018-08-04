@@ -45,7 +45,7 @@ using ::testing::Test;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
-using ::wobbly::matchers::Eq;
+using ::animation::matchers::Eq;
 
 namespace
 {

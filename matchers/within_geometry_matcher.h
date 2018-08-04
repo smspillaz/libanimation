@@ -32,7 +32,7 @@
 
 #include <gmock/gmock.h>       // IWYU pragma: keep
 
-namespace wobbly
+namespace animation
 {
     namespace matchers
     {

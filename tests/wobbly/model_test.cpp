@@ -63,11 +63,11 @@ using ::testing::Types;
 using ::testing::ValuesIn;
 using ::testing::WithParamInterface;
 
-using ::wobbly::matchers::Eq;
-using ::wobbly::matchers::SatisfiesModel;
-using ::wobbly::matchers::WithinGeometry;
+using ::animation::matchers::Eq;
+using ::animation::matchers::SatisfiesModel;
+using ::animation::matchers::WithinGeometry;
 
-using ::wobbly::models::Parabolic;
+using ::animation::models::Parabolic;
 
 namespace
 {
@@ -319,7 +319,7 @@ namespace
                               << candidate << ")" << " with delta ("
                               << delta << ") is " << distTanTheta;
 
-                return wobbly::testing::close_at_tolerance (vecTanTheta, distTanTheta, 10e-7);
+                return animation::testing::close_at_tolerance (vecTanTheta, distTanTheta, 10e-7);
             }
 
             void DescribeTo (::std::ostream *os) const

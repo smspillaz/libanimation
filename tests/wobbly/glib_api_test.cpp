@@ -45,7 +45,7 @@ using ::testing::Matcher;
 using ::testing::Not;
 using ::testing::Test;
 
-using ::wobbly::matchers::WithinGeometry;
+using ::animation::matchers::WithinGeometry;
 
 bool operator== (AnimationVector const &lhs,
                  AnimationVector const &rhs)
