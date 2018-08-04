@@ -1,55 +1,6 @@
-libwobbly (0.3.2) eos; urgency=medium
+libanimation (0.0.0) eos; urgency=medium
 
-  * debian/control:
-    - Rename gir1.2-wobbly-glib0 to gir1.2-wobbly-glib-0.3
-  * libwobbly-dev:
-    - Install the unversioned library
-  * libwobbly0:
-    - Install the soversioned library
-  * libwobbly-glib-dev
-    - Install the unversioned library
-  * libwobbly-glib0:
-    - Install the so versioned library
-
- -- Sam Spilsbury <sam@endlessm.com>  Tue, 10 Jul 2018 23:30:51 +0800
-
-libwobbly (0.3.1) eos; urgency=medium
-
-  * wobbly-glib: Add wobbly-glib library
   * debian/control
-     - Add packaging for wobbly-glib0, wobbly-glib-dev, gir1.2-wobbly-glib
+     - Rename package to libanimation, add transitional rules
 
- -- Sam Spilsbury <sam@endlessm.com>  Sat, 07 Jul 2018 02:26:53 +0800
-
-libwobbly (0.3.0) eos; urgency=medium
-
-  * build: Port to Meson
-  * wobbly: Remove dependency on boost
-  * debian/control:
-     - Remove dependency on boost
-
- -- Sam Spilsbury <sam@endlessm.com>  Wed, 04 Jul 2018 08:24:25 +0800
-
-libwobbly (0.2.1) eos; urgency=medium
-
-  * cmake: Add SOVERSION to library (credit: Robert McQueen)
-
- -- Sam Spilsbury <sam@endlessm.com>  Wed, 14 Jun 2017 03:08:29 +0800
-
-libwobbly (0.2) eos; urgency=medium
-
-  * Update cmake modules, move to 3.0(native)
-
- -- Sam Spilsbury <sam@endlessm.com>  Thu, 04 Aug 2016 13:45:24 +0800
-
-libwobbly (0.1-1endless1) unstable; urgency=low
-
-  * Fixed distortion on maximize
-
- -- Sam Spilsbury <smspillaz@endless>  Wed, 15 Oct 2014 04:14:11 +0800
-
-libwobbly (0.1-1) unstable; urgency=low
-
-  * Initial release
-
- -- Sam Spilsbury <smspillaz@gmail.com>  Tue, 04 Feb 2014 10:02:19 -0200
+ -- Sam Spilsbury <sam@endlessm.com>  Thu, 09 Aug 2018 02:26:53 +0800
