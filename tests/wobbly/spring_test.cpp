@@ -42,10 +42,10 @@ using ::testing::ExitedWithCode;
 using ::testing::Not;
 using ::testing::Test;
 
-using ::wobbly::matchers::Eq;
-using ::wobbly::matchers::SatisfiesModel;
+using ::animation::matchers::Eq;
+using ::animation::matchers::SatisfiesModel;
 
-using ::wobbly::models::Linear;
+using ::animation::models::Linear;
 
 namespace
 {
