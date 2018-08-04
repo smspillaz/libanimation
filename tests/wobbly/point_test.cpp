@@ -35,7 +35,7 @@ using ::testing::WithParamInterface;
 
 namespace
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     class DoublePointView :
         public Test,
@@ -57,16 +57,16 @@ namespace
 
     TEST_P (DoublePointView, WriteXWithOffset)
     {
-        wobbly::PointView <double> pv (array, pointOffset);
-        wgd::set <0> (pv, 1.0);
+        animation::PointView <double> pv (array, pointOffset);
+        agd::set <0> (pv, 1.0);
 
         EXPECT_EQ (array[arrayOffset], 1.0);
     }
 
     TEST_P (DoublePointView, WriteYWithOffset)
     {
-        wobbly::PointView <double> pv (array, pointOffset);
-        wgd::set <1> (pv, 1.0);
+        animation::PointView <double> pv (array, pointOffset);
+        agd::set <1> (pv, 1.0);
 
         EXPECT_EQ (array[arrayOffset + 1], 1.0);
     }
@@ -79,9 +79,9 @@ namespace
         std::array <double, 8> array = {
                                            { 1, 2, 3, 4, 5, 6, 7, 8 }
                                        };
-        wobbly::PointView <double> mutpv (array, 1);
-        wobbly::PointView <double const> constpv (mutpv);
+        animation::PointView <double> mutpv (array, 1);
+        animation::PointView <double const> constpv (mutpv);
 
-        EXPECT_TRUE (wgd::equals (mutpv, constpv));
+        EXPECT_TRUE (agd::equals (mutpv, constpv));
     }
 }

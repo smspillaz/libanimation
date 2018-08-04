@@ -57,7 +57,7 @@ animation_wobbly_anchor_move_by (AnimationWobblyAnchor *anchor,
     reinterpret_cast <AnimationWobblyAnchorPrivate *> (animation_wobbly_anchor_get_instance_private (anchor));
 
   if (priv->anchor != nullptr)
-    priv->anchor->MoveBy (wobbly::Point (vector.x, vector.y));
+    priv->anchor->MoveBy (animation::Point (vector.x, vector.y));
 }
 
 

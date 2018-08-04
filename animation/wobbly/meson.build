@@ -10,8 +10,6 @@ wobbly_sources = [
 ]
 
 wobbly_headers = [
-  'geometry.h',
-  'geometry_traits.h',
   'wobbly.h'
 ]
 

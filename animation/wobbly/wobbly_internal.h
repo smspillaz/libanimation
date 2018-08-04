@@ -44,9 +44,9 @@
 #include <math.h>                       // for fabs
 #include <stddef.h>                     // for size_t
 
-#include <animation/wobbly/geometry.h>                   // for PointView, PointModel, etc
-#include <animation/wobbly/geometry_traits.h>            // for assign, scale, etc
-#include <animation/wobbly/wobbly.h>    // for PointView, Vector, Point, etc/wobbly_internal.h
+#include <animation/geometry.h>         // for PointView, PointModel, etc
+#include <animation/geometry_traits.h>  // for assign, scale, etc
+#include <animation/wobbly/wobbly.h>    // for PointView, Vector, Point, etc
 
 namespace wobbly
 {
@@ -73,21 +73,21 @@ namespace wobbly
 
     namespace geometry
     {
-        namespace wgd = wobbly::geometry::dimension;
+        namespace agd = animation::geometry::dimension;
 
         namespace detail
         {
             template <typename P, typename F>
             inline void CoordinateOperation (P &p, F const &f)
             {
-                wobbly::geometry::dimension::for_each_coordinate (p, f);
+                animation::geometry::dimension::for_each_coordinate (p, f);
             }
         }
 
         template <typename Point>
         inline void ResetIfCloseToZero (Point &p, double t)
         {
-            wgd::for_each_coordinate (p,
+            agd::for_each_coordinate (p,
                                       [t](auto const &c) -> decltype(auto) {
                                           return std::fabs (c) < t ? 0.0 : c;
                                       });
@@ -96,7 +96,7 @@ namespace wobbly
         template <typename Point>
         inline void MakeAbsolute (Point &p)
         {
-            wgd::for_each_coordinate (p,
+            agd::for_each_coordinate (p,
                                       [](auto const &c) -> decltype(auto) {
                                           return std::fabs (c);
                                       });
@@ -106,7 +106,7 @@ namespace wobbly
         inline Point Absolute (Point &p)
         {
             Point ret;
-            wgd::assign (ret, p);
+            agd::assign (ret, p);
             MakeAbsolute (ret);
             return ret;
         }
@@ -125,12 +125,12 @@ namespace wobbly
 
     namespace mesh
     {
-        namespace wgd = wobbly::geometry::dimension;
+        namespace agd = animation::geometry::dimension;
 
         inline void
-        CalculatePositionArray (wobbly::Point  const &initialPosition,
-                                wobbly::MeshArray    &array,
-                                wobbly::Vector const &tileSize)
+        CalculatePositionArray (animation::Point  const &initialPosition,
+                                wobbly::MeshArray       &array,
+                                animation::Vector const &tileSize)
         {
             assert (array.size () == wobbly::config::ArraySize);
 
@@ -139,17 +139,17 @@ namespace wobbly
                 size_t const row = i / wobbly::config::Width;
                 size_t const column = i % wobbly::config::Width;
 
-                wobbly::PointView <double> position (array, i);
-                wgd::assign (position, initialPosition);
-                wgd::pointwise_add (position,
-                                    wobbly::Point (column * wgd::get <0> (tileSize),
-                                                   row * wgd::get <1> (tileSize)));
+                animation::PointView <double> position (array, i);
+                agd::assign (position, initialPosition);
+                agd::pointwise_add (position,
+                                    animation::Point (column * agd::get <0> (tileSize),
+                                                      row * agd::get <1> (tileSize)));
             }
         }
 
         inline size_t
-        ClosestIndexToPosition (wobbly::MeshArray   &points,
-                                wobbly::Point const &pos)
+        ClosestIndexToPosition (wobbly::MeshArray      &points,
+                                animation::Point const &pos)
         {
             std::experimental::optional <size_t> nearestIndex;
             double distance = std::numeric_limits <double>::max ();
@@ -158,8 +158,8 @@ namespace wobbly
 
             for (size_t i = 0; i < wobbly::config::TotalIndices; ++i)
             {
-                wobbly::PointView <double> view (points, i);
-                double objectDistance = wgd::distance (pos, view);
+                animation::PointView <double> view (points, i);
+                double objectDistance = agd::distance (pos, view);
                 if (objectDistance < distance)
                 {
                     nearestIndex = i;
@@ -568,7 +568,7 @@ namespace wobbly
         public:
 
             typedef std::function <void (MeshArray &)> OriginRecalcStrategy;
-            typedef std::function <void (wobbly::Vector const &)> Move;
+            typedef std::function <void (animation::Vector const &)> Move;
 
             TargetMesh (OriginRecalcStrategy const &recalc);
 
@@ -765,12 +765,12 @@ namespace wobbly
     };
 
     bool
-    EulerIntegrate (double                           time,
-                    double                           friction,
-                    double                           mass,
-                    wobbly::PointView <double>       &&inposition,
-                    wobbly::PointView <double>       &&invelocity,
-                    wobbly::PointView <double const> &&inforce);
+    EulerIntegrate (double                              time,
+                    double                              friction,
+                    double                              mass,
+                    animation::PointView <double>       &&inposition,
+                    animation::PointView <double>       &&invelocity,
+                    animation::PointView <double const> &&inforce);
 
     class EulerIntegration
     {
@@ -959,22 +959,22 @@ namespace wobbly
                         return tmp;
                     }
                     
-                    void MoveBy (wobbly::Vector const &delta)
+                    void MoveBy (animation::Vector const &delta)
                     {
                         for (auto &p : mPoints)
-                            wobbly::geometry::dimension::pointwise_add (p.point, delta);
+                            animation::geometry::dimension::pointwise_add (p.point, delta);
                     }
                     
-                    void Scale (wobbly::Point  const &origin,
-                                wobbly::Vector const &scaleFactor)
+                    void Scale (animation::Point  const &origin,
+                                animation::Vector const &scaleFactor)
                     {
-                        namespace wgd = wobbly::geometry::dimension;
+                        namespace agd = animation::geometry::dimension;
 
                         for (auto &p : mPoints)
                         {
-                            wgd::pointwise_subtract (p.point, origin);
-                            wgd::pointwise_scale (p.point, scaleFactor);
-                            wgd::pointwise_add (p.point, origin);
+                            agd::pointwise_subtract (p.point, origin);
+                            agd::pointwise_scale (p.point, scaleFactor);
+                            agd::pointwise_add (p.point, origin);
                         }
                     }
 
@@ -1007,13 +1007,13 @@ namespace wobbly
                                   PosPreference const &firstPref,
                                   PosPreference const &secondPref);
                                   
-            void MoveInsertedAnchorsBy (wobbly::Vector const &delta)
+            void MoveInsertedAnchorsBy (animation::Vector const &delta)
             {
                 mInserted.MoveBy (delta);
             }
             
-            void ScaleInsertedAnchors (wobbly::Point  const &origin,
-                                       wobbly::Vector const &scaleFactor)
+            void ScaleInsertedAnchors (animation::Point  const &origin,
+                                       animation::Vector const &scaleFactor)
             {
                 mInserted.Scale (origin, scaleFactor);
             }
@@ -1033,11 +1033,11 @@ namespace wobbly
     {
         public:
 
-            SpringStep (IntegrationStrategy  &strategy,
-                        MeshArray            &array,
-                        double         const &constant,
-                        double         const &friction,
-                        wobbly::Vector const &tileSize) :
+            SpringStep (IntegrationStrategy     &strategy,
+                        MeshArray               &array,
+                        double            const &constant,
+                        double            const &friction,
+                        animation::Vector const &tileSize) :
                 constant (constant),
                 friction (friction),
                 integrator (strategy),
@@ -1060,7 +1060,7 @@ namespace wobbly
                 return mesh.InstallAnchorSprings (install, first, second);
             }
 
-            void MoveInsertedAnchorsBy (wobbly::Vector const &delta)
+            void MoveInsertedAnchorsBy (animation::Vector const &delta)
             {
                 mesh.MoveInsertedAnchorsBy (delta);
             }
@@ -1100,46 +1100,46 @@ namespace wobbly
                                      double   mass,
                                      double   time)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
-            wobbly::Vector acceleration;
-            wgd::assign (acceleration, force);
-            wgd::scale (acceleration, 1.0 / mass);
+            animation::Vector acceleration;
+            agd::assign (acceleration, force);
+            agd::scale (acceleration, 1.0 / mass);
 
             /* v[t] = v[t - 1] + at */
-            wobbly::Vector additionalVelocity (acceleration);
-            wgd::scale (additionalVelocity, time);
-            wgd::pointwise_add (velocity, additionalVelocity);
+            animation::Vector additionalVelocity (acceleration);
+            agd::scale (additionalVelocity, time);
+            agd::pointwise_add (velocity, additionalVelocity);
         }
     }
 }
 
 inline bool
-wobbly::EulerIntegrate (double                           time,
-                        double                           friction,
-                        double                           mass,
-                        wobbly::PointView <double>       &&inposition,
-                        wobbly::PointView <double>       &&invelocity,
-                        wobbly::PointView <double const> &&inforce)
+wobbly::EulerIntegrate (double                              time,
+                        double                              friction,
+                        double                              mass,
+                        animation::PointView <double>       &&inposition,
+                        animation::PointView <double>       &&invelocity,
+                        animation::PointView <double const> &&inforce)
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     assert (mass > 0.0f);
 
-    wobbly::PointView <double> position (std::move (inposition));
-    wobbly::PointView <double const> force (std::move (inforce));
-    wobbly::PointView <double> velocity (std::move (invelocity));
+    animation::PointView <double> position (std::move (inposition));
+    animation::PointView <double const> force (std::move (inforce));
+    animation::PointView <double> velocity (std::move (invelocity));
 
     /* Apply friction, which is exponentially
      * proportional to both velocity and time */
-    wobbly::Vector totalForce;
-    wgd::assign (totalForce, force);
+    animation::Vector totalForce;
+    agd::assign (totalForce, force);
 
-    wobbly::Vector frictionForce;
-    wgd::pointwise_add (frictionForce, velocity);
-    wgd::scale (frictionForce, friction);
+    animation::Vector frictionForce;
+    agd::pointwise_add (frictionForce, velocity);
+    agd::scale (frictionForce, friction);
 
-    wgd::pointwise_subtract (totalForce, frictionForce);
+    agd::pointwise_subtract (totalForce, frictionForce);
 
     /* First apply velocity change for force
      * exerted over time */
@@ -1152,15 +1152,15 @@ wobbly::EulerIntegrate (double                           time,
      *
      *   d[t] = ((v[t - 1] + v[t]) / 2) * t
      */
-    wobbly::Vector positionDelta;
-    wgd::assign (positionDelta, velocity);
-    wgd::scale (positionDelta, time / 2);
+    animation::Vector positionDelta;
+    agd::assign (positionDelta, velocity);
+    agd::scale (positionDelta, time / 2);
 
-    wgd::pointwise_add (position, positionDelta);
+    agd::pointwise_add (position, positionDelta);
 
     /* Return true if we still have velocity remaining */
-    bool result = std::fabs (wgd::get <0> (velocity)) > 0.00 ||
-                  std::fabs (wgd::get <1> (velocity)) > 0.00;
+    bool result = std::fabs (agd::get <0> (velocity)) > 0.00 ||
+                  std::fabs (agd::get <1> (velocity)) > 0.00;
 
     return result;
 }
@@ -1185,8 +1185,8 @@ wobbly::EulerIntegration::Step (size_t          index,
 inline void
 wobbly::EulerIntegration::Reset (size_t index)
 {
-    wobbly::PointView <double> velocity (velocities, index);
-    wobbly::geometry::dimension::assign_value (velocity, 0.0);
+    animation::PointView <double> velocity (velocities, index);
+    animation::geometry::dimension::assign_value (velocity, 0.0);
 }
 
 namespace wobbly
@@ -1194,19 +1194,19 @@ namespace wobbly
     namespace springs
     {
         template <typename P1, typename P2>
-        inline wobbly::Vector
-        DeltaFromDesired (P1             const &a,
-                          P2             const &b,
-                          wobbly::Vector const &desired)
+        inline animation::Vector
+        DeltaFromDesired (P1                const &a,
+                          P2                const &b,
+                          animation::Vector const &desired)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
-            wobbly::Vector delta (0.5 * (wgd::get <0> (b) -
-                                         wgd::get <0> (a) +
-                                         wgd::get <0> (desired)),
-                                  0.5 * (wgd::get <1> (b) -
-                                         wgd::get <1> (a) +
-                                         wgd::get <1> (desired)));
+            animation::Vector delta (0.5 * (agd::get <0> (b) -
+                                            agd::get <0> (a) +
+                                            agd::get <0> (desired)),
+                                     0.5 * (agd::get <1> (b) -
+                                            agd::get <1> (a) +
+                                            agd::get <1> (desired)));
             return delta;
         }
     }
@@ -1215,10 +1215,10 @@ namespace wobbly
 inline bool
 wobbly::Spring::ApplyForces (double springConstant) const
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     Vector desiredNegative (desiredDistance);
-    wgd::scale (desiredNegative, -1);
+    agd::scale (desiredNegative, -1);
 
     Vector deltaA (springs::DeltaFromDesired (posA,
                                               posB,
@@ -1233,18 +1233,18 @@ wobbly::Spring::ApplyForces (double springConstant) const
     Vector springForceA (deltaA);
     Vector springForceB (deltaB);
 
-    wgd::scale (springForceA, springConstant);
-    wgd::scale (springForceB, springConstant);
+    agd::scale (springForceA, springConstant);
+    agd::scale (springForceB, springConstant);
 
-    wgd::pointwise_add (forceA, springForceA);
-    wgd::pointwise_add (forceB, springForceB);
+    agd::pointwise_add (forceA, springForceA);
+    agd::pointwise_add (forceB, springForceB);
 
     /* Return true if a delta was applied at any point */
     Vector delta (geometry::Absolute (deltaA));
-    wgd::pointwise_add (delta, geometry::Absolute (deltaB));
+    agd::pointwise_add (delta, geometry::Absolute (deltaB));
 
-    bool result = wgd::get <0> (delta) > 0.00 ||
-                  wgd::get <1> (delta) > 0.00;
+    bool result = agd::get <0> (delta) > 0.00 ||
+                  agd::get <1> (delta) > 0.00;
 
     return result;
 }
@@ -1269,13 +1269,13 @@ wobbly::SpringMesh::CalculateForces (double springConstant) const
            };
 }
 
-inline wobbly::Point
+inline animation::Point
 wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
 {
-    namespace wgd = ::wobbly::geometry::dimension;
+    namespace agd = ::animation::geometry::dimension;
 
-    double const u = wgd::get <0> (normalized);
-    double const v = wgd::get <1> (normalized);
+    double const u = agd::get <0> (normalized);
+    double const v = agd::get <1> (normalized);
 
     /* Create a vector of coefficients like
      * | (1 - u)^3      |

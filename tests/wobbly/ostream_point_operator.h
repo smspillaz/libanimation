@@ -28,31 +28,31 @@
 #include <iosfwd>                       // for ostream
 #include <ostream>                      // for basic_ostream, char_traits, etc
 
-namespace wobbly
+namespace animation
 {
     namespace geometry
     {
         inline std::ostream &
         operator<< (std::ostream &lhs, Point const &p)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
             return lhs << std::setprecision (10)
                        << "x: "
-                       << wgd::get <0> (p)
+                       << agd::get <0> (p)
                        << " y: "
-                       << wgd::get <1> (p);
+                       << agd::get <1> (p);
         }
 
         template <typename NumericType>
         inline std::ostream &
         operator<< (std::ostream                                    &lhs,
-                    wobbly::geometry::PointView <NumericType> const &p)
+                    animation::geometry::PointView <NumericType> const &p)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
             Point point;
-            wgd::assign (point, p);
+            agd::assign (point, p);
             return lhs << point;
         }
     }

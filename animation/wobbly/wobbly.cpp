@@ -82,14 +82,13 @@
 
 #include <experimental/optional>        // for optional
 
-#include <animation/wobbly/geometry.h>  // for PointView, PointModel, etc
-#include <animation/wobbly/geometry_traits.h> // for assign, scale, etc
+#include <animation/geometry.h>  // for PointView, PointModel, etc
+#include <animation/geometry_traits.h> // for assign, scale, etc
 #include <animation/wobbly/wobbly.h>              // for Model, etc
 
 #include "wobbly_internal.h"            // for Spring, MeshArray, etc
 
-namespace wg = ::wobbly::geometry;
-namespace wgd = ::wobbly::geometry::dimension;
+namespace agd = ::animation::geometry::dimension;
 
 void
 wobbly::Anchor::MovableAnchorDeleter::operator () (MovableAnchor *anchor)
@@ -106,7 +105,7 @@ wobbly::Anchor::~Anchor ()
 }
 
 void
-wobbly::Anchor::MoveBy (wobbly::Vector const &delta) noexcept
+wobbly::Anchor::MoveBy (animation::Vector const &delta) noexcept
 {
     priv->MoveBy (delta);
 }
@@ -232,21 +231,21 @@ wobbly::Spring::~Spring ()
 void
 wobbly::Spring::ScaleLength (Vector scaleFactor)
 {
-    wgd::pointwise_scale (desiredDistance, scaleFactor);
+    agd::pointwise_scale (desiredDistance, scaleFactor);
 }
 
 namespace
 {
     std::vector <wobbly::Spring>
-    GenerateBaseSpringMesh (wobbly::MeshArray    &points,
-                            wobbly::MeshArray    &forces,
-                            wobbly::Vector const &springDimensions)
+    GenerateBaseSpringMesh (wobbly::MeshArray       &points,
+                            wobbly::MeshArray       &forces,
+                            animation::Vector const &springDimensions)
     {
         using namespace wobbly;
         std::vector <Spring> springs;
 
-        double const springWidth = wgd::get <0> (springDimensions);
-        double const springHeight = wgd::get <1> (springDimensions);
+        double const springWidth = agd::get <0> (springDimensions);
+        double const springHeight = agd::get <1> (springDimensions);
 
         size_t const nSprings = SpringCountForGridSize (config::Width,
                                                         config::Height);
@@ -310,7 +309,7 @@ wobbly::SpringMesh::Scale (Vector const &scaleFactor)
 namespace
 {
     wobbly::Spring const &
-    FindSpringToSplit (wobbly::Point                    const &install,
+    FindSpringToSplit (animation::Point                 const &install,
                        wobbly::SpringMesh::SpringVector const &vector)
     {
         using namespace wobbly;
@@ -321,7 +320,7 @@ namespace
 
         vector.Each ([&](Spring const &spring) {
             double currentSpringPrimaryDistance =
-                wgd::distance (spring.FirstPosition (), install);
+                agd::distance (spring.FirstPosition (), install);
             if (currentSpringPrimaryDistance < primaryDistance)
             {
                 primaryDistance = currentSpringPrimaryDistance;
@@ -334,7 +333,7 @@ namespace
             if (currentSpringPrimaryDistance == primaryDistance)
             {
                 double currentSpringSecondaryDistance =
-                    wgd::distance (spring.SecondPosition (), install);
+                    agd::distance (spring.SecondPosition (), install);
                 if (currentSpringSecondaryDistance < secondaryDistance)
                 {
                     found = &spring;
@@ -362,8 +361,8 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
 
     std::unique_ptr <double[]> data (new double[4]);
     std::fill_n (data.get (), 4, 0);
-    wobbly::PointView <double> anchorView (data.get (), 0);
-    wgd::assign (anchorView, install);
+    animation::PointView <double> anchorView (data.get (), 0);
+    agd::assign (anchorView, install);
 
     /* We always want the spring to *read* the first and second
      * positions, although the positions for the purpose of
@@ -379,16 +378,16 @@ wobbly::SpringMesh::InstallAnchorSprings (Point         const &install,
     PointView <double const> secondDesired (secondPref (found));
 
     auto const insertSpring =
-        [this, &data](wobbly::PointView <double const> meshPoint,
-                      wobbly::PointView <double const> desiredPoint,
-                      wobbly::PointView <double>       meshForce) {
+        [this, &data](animation::PointView <double const> meshPoint,
+                      animation::PointView <double const> desiredPoint,
+                      animation::PointView <double>       meshForce) {
             PointView <double const> anchorPoint (data.get (), 0);
             PointView <double> updatable (data.get (), 0);
             PointView <double> anchorForce (data.get (), 1);
 
             Vector delta;
-            wgd::assign (delta, desiredPoint);
-            wgd::pointwise_subtract (delta, anchorPoint);
+            agd::assign (delta, desiredPoint);
+            agd::pointwise_subtract (delta, anchorPoint);
 
             return mSprings.EmplaceAndTrack (std::move (anchorForce),
                                              std::move (meshForce),
@@ -437,17 +436,17 @@ namespace wobbly
                      double         height,
                      Settings const &settings);
 
-            std::array <wobbly::Point, 4> const
+            std::array <animation::Point, 4> const
             Extremes () const;
 
             template <typename... Args>
-            wobbly::Point
+            animation::Point
             TargetPositionByFullIntegration (Args&& ...additionalSteps) const;
 
-            wobbly::Point
+            animation::Point
             TargetPosition () const;
 
-            wobbly::Vector
+            animation::Vector
             TileSize () const;
 
             double mWidth, mHeight;
@@ -605,29 +604,29 @@ namespace
     }
 
     template <typename AnchorPoint>
-    wobbly::Point TopLeftPositionInSettledMesh (AnchorPoint    const &anchor,
-                                                size_t         const index,
-                                                wobbly::Vector const &tileSize)
+    animation::Point TopLeftPositionInSettledMesh (AnchorPoint       const &anchor,
+                                                   size_t            const index,
+                                                   animation::Vector const &tileSize)
     {
-        wobbly::Point start;
-        wgd::assign (start, anchor);
+        animation::Point start;
+        agd::assign (start, anchor);
 
         size_t const row = index % wobbly::config::Width;
         size_t const column = index / wobbly::config::Width;
 
-        wobbly::Point deltaToTopLeft (wgd::get <0> (tileSize) * row,
-                                      wgd::get <1> (tileSize) * column);
-        wgd::pointwise_subtract (start, deltaToTopLeft);
+        animation::Point deltaToTopLeft (agd::get <0> (tileSize) * row,
+                                         agd::get <1> (tileSize) * column);
+        agd::pointwise_subtract (start, deltaToTopLeft);
 
         return start;
     }
 }
 
 template <typename... Args>
-wobbly::Point
+animation::Point
 wobbly::Model::Private::TargetPositionByFullIntegration (Args&& ...additionalSteps) const
 {
-    wobbly::Vector const tileSize (TileSize ());
+    animation::Vector const tileSize (TileSize ());
 
     auto points (mPositions.PointArray ());
     auto &anchors (mAnchors);
@@ -648,20 +647,20 @@ wobbly::Model::Private::TargetPositionByFullIntegration (Args&& ...additionalSte
                       std::forward <Args> (additionalSteps)...));
 
     /* Model will be settled, return the top left point */
-    wobbly::Point result;
-    wgd::assign (result, wobbly::PointView <double const> (points, 0));
+    animation::Point result;
+    agd::assign (result, animation::PointView <double const> (points, 0));
 
     return result;
 }
 
-wobbly::Point
+animation::Point
 wobbly::Model::Private::TargetPosition () const
 {
     /* If we have at least one anchor, we can take a short-cut and determine
      * the target position by reference to it */
     auto early = mTargets.PerformIfActive ([](MeshArray const &targets) {
-        wobbly::Point constructed;
-        wgd::assign (constructed, wobbly::PointView <double const> (targets, 0));
+        animation::Point constructed;
+        agd::assign (constructed, animation::PointView <double const> (targets, 0));
         return std::make_tuple (true, constructed);
     });
 
@@ -673,11 +672,11 @@ wobbly::Model::Private::TargetPosition () const
     return TargetPositionByFullIntegration (constrainment);
 }
 
-wobbly::Vector
+animation::Vector
 wobbly::Model::Private::TileSize () const
 {
-    return wobbly::Vector (mWidth / (config::Width - 1),
-                           mHeight / (config::Height - 1));
+    return animation::Vector (mWidth / (config::Width - 1),
+                              mHeight / (config::Height - 1));
 }
 
 namespace
@@ -729,10 +728,10 @@ namespace
                 return *this;
             }
 
-            void MoveBy (wobbly::Point const &delta) noexcept
+            void MoveBy (animation::Point const &delta) noexcept
             {
-                wobbly::PointView <double> pv (data.get (), 0);
-                wgd::pointwise_add (pv, delta);
+                animation::PointView <double> pv (data.get (), 0);
+                agd::pointwise_add (pv, delta);
             }
 
         private:
@@ -749,7 +748,7 @@ namespace
 
     wobbly::Anchor
     InsertPointStrategy (wobbly::TargetMesh::Hnd                       &&handle,
-                         wobbly::Point                           const &install,
+                         animation::Point                        const &install,
                          wobbly::MeshArray                       const &points,
                          wobbly::TargetMesh                      const &targets,
                          wobbly::SpringStep <wobbly::EulerIntegration> &spring)
@@ -779,7 +778,7 @@ namespace
                     /* We can't return a PointView direclty since it isn't
                      * default-constructible, but we can return a tuple
                      * with its arguments */
-                    if (wgd::equals ((spring.*fetch) (), position))
+                    if (agd::equals ((spring.*fetch) (), position))
                         return std::make_tuple (targets.data (), i);
                 }
 
@@ -812,7 +811,7 @@ namespace
                 return active ? PP ([fetch, &getTarget](Spring const &spring) {
                                         // cppcheck-suppress unreachableCode
                                         auto args = getTarget (spring, fetch);
-                                        typedef wobbly::PointView <double const>
+                                        typedef animation::PointView <double const>
                                                 CDPV;
                                         return CDPV (std::get <0> (args),
                                                      std::get <1> (args));
@@ -849,9 +848,9 @@ namespace
     {
         public:
 
-            GrabAnchor (wobbly::PointView <double> &&position,
-                        wobbly::AnchorArray        &array,
-                        size_t                     index) :
+            GrabAnchor (animation::PointView <double> &&position,
+                        wobbly::AnchorArray           &array,
+                        size_t                        index) :
                 position (std::move (position)),
                 array (array),
                 index (index)
@@ -864,9 +863,9 @@ namespace
                 array.Unlock (index);
             }
 
-            void MoveBy (wobbly::Point const &delta) noexcept
+            void MoveBy (animation::Point const &delta) noexcept
             {
-                wgd::pointwise_add (position, delta);
+                agd::pointwise_add (position, delta);
             }
 
         private:
@@ -874,16 +873,16 @@ namespace
             GrabAnchor (GrabAnchor const &) = delete;
             GrabAnchor & operator= (GrabAnchor const &) = delete;
 
-            wobbly::PointView <double> position;
-            wobbly::AnchorArray        &array;
-            size_t                     index;
+            animation::PointView <double> position;
+            wobbly::AnchorArray           &array;
+            size_t                        index;
     };
 
     wobbly::Anchor
-    GrabAnchorStrategy (wobbly::TargetMesh::Hnd    &&handle,
-                        wobbly::PointView <double> &&point,
-                        wobbly::AnchorArray        &anchors,
-                        size_t                     index)
+    GrabAnchorStrategy (wobbly::TargetMesh::Hnd       &&handle,
+                        animation::PointView <double> &&point,
+                        wobbly::AnchorArray           &anchors,
+                        size_t                        index)
     {
         typedef GrabAnchor GA;
 
@@ -910,8 +909,8 @@ wobbly::Model::GrabAnchor (Point const &position) noexcept (false)
     auto activation (priv->mTargets.Activate ());
 
     return Anchor (GrabAnchorStrategy (std::move (activation),
-                                       wobbly::PointView <double> (points,
-                                                                   index),
+                                       animation::PointView <double> (points,
+                                                                      index),
                                        priv->mAnchors,
                                        index));
 }
@@ -944,8 +943,8 @@ wobbly::Model::MoveModelBy (Point const &delta)
     {
         PointView <double> pointView (points, i);
         PointView <double> targetView (estimated, i);
-        wgd::pointwise_add (pointView, delta);
-        wgd::pointwise_add (targetView, delta);
+        agd::pointwise_add (pointView, delta);
+        agd::pointwise_add (targetView, delta);
     }
 
     /* Also move any inserted springs */
@@ -963,7 +962,7 @@ wobbly::Model::MoveModelTo (Point const &point)
     auto const &target (priv->TargetPosition ());
 
     Vector delta (point);
-    wgd::pointwise_subtract (delta, target);
+    agd::pointwise_subtract (delta, target);
 
     MoveModelBy (delta);
 }
@@ -976,10 +975,10 @@ wobbly::Model::ResizeModel (double width, double height)
     assert (height > 0.0f);
 
     /* Second, work out the scale factors */
-    wobbly::Vector const scaleFactor (width / priv->mWidth,
-                                      height / priv->mHeight);
+    animation::Vector const scaleFactor (width / priv->mWidth,
+                                         height / priv->mHeight);
 
-    if (wgd::equals (scaleFactor, wobbly::Vector (1.0, 1.0)))
+    if (agd::equals (scaleFactor, animation::Vector (1.0, 1.0)))
         return;
 
     /* Then on each point, implement a transformation
@@ -988,18 +987,18 @@ wobbly::Model::ResizeModel (double width, double height)
     auto &points (priv->mPositions.PointArray ());
     auto &targets (priv->mTargets.PointArray ());
 
-    wobbly::Point const positionsOrigin (priv->TargetPosition ());
-    wobbly::Point const targetsOrigin = [&targets]() {
-        wobbly::Point target;
-        wgd::assign (target, wobbly::PointView <double const> (targets, 0));
+    animation::Point const positionsOrigin (priv->TargetPosition ());
+    animation::Point const targetsOrigin = [&targets]() {
+        animation::Point target;
+        agd::assign (target, animation::PointView <double const> (targets, 0));
         return target;
     } ();
 
     auto const rescale =
         [&scaleFactor](Point const &origin, PointView <double> &&p) {
-            wgd::pointwise_subtract (p, origin);
-            wgd::pointwise_scale (p, scaleFactor);
-            wgd::pointwise_add (p, origin);
+            agd::pointwise_subtract (p, origin);
+            agd::pointwise_scale (p, scaleFactor);
+            agd::pointwise_add (p, origin);
         };
 
     /* Rescale all points and targets */
@@ -1039,33 +1038,33 @@ wobbly::ConstrainmentStep::operator () (MeshArray         &points,
 
         for (size_t i = 0; i < config::TotalIndices; ++i)
         {
-            wobbly::PointView <double const> target (targets, i);
+            animation::PointView <double const> target (targets, i);
             /* In each position in the main position array we'll work out the
              * pythagorean delta between the ideal positon and current one.
              * If it is outside the maximum range, then we'll shrink the delta
              * and reapply it */
             double const maximumRange = threshold;
 
-            wobbly::PointView <double> point (points, i);
-            double range = wgd::distance (target, point);
+            animation::PointView <double> point (points, i);
+            double range = agd::distance (target, point);
 
             if (range < maximumRange)
                 continue;
 
             ret |= true;
 
-            auto sin = (wgd::get <1> (target) - wgd::get <1> (point)) / range;
-            auto cos = (wgd::get <0> (target) - wgd::get <0> (point)) / range;
+            auto sin = (agd::get <1> (target) - agd::get <1> (point)) / range;
+            auto cos = (agd::get <0> (target) - agd::get <0> (point)) / range;
 
             /* Now we want to vectorize range and
              * find our new x and y offsets */
             double const newRange = std::min (maximumRange, range);
-            wobbly::Point newDelta (newRange * cos,
-                                    newRange * sin);
+            animation::Point newDelta (newRange * cos,
+                                       newRange * sin);
 
             /* Offset from the "target" position */
-            wgd::assign (point, target);
-            wgd::pointwise_subtract (point, newDelta);
+            agd::assign (point, target);
+            agd::pointwise_subtract (point, newDelta);
         }
 
         return ret;
@@ -1113,13 +1112,13 @@ wobbly::Model::Step (unsigned int time)
     return priv->mCurrentlyUnequal;
 }
 
-wobbly::Point
+animation::Point
 wobbly::Model::DeformTexcoords (Point const &normalized) const
 {
     return priv->mPositions.DeformUnitCoordsToMeshSpace (normalized);
 }
 
-std::array <wobbly::Point, 4> const
+std::array <animation::Point, 4> const
 wobbly::Model::Extremes () const
 {
     return priv->mPositions.Extremes ();
@@ -1146,7 +1145,7 @@ wobbly::TargetMesh::Activate () noexcept (true)
             for (size_t i = 0; i < config::TotalIndices; ++i)
             {
                 PointView <double> pv (mPoints, i);
-                wgd::pointwise_add (pv, delta);
+                agd::pointwise_add (pv, delta);
             }
         }
     };
@@ -1175,7 +1174,7 @@ namespace
     template <typename Point>
     void PointRound (Point &point)
     {
-        wgd::for_each_coordinate (point, [](auto const &c) {
+        agd::for_each_coordinate (point, [](auto const &c) {
             return std::round (c);
         });
     }
@@ -1187,14 +1186,14 @@ namespace
     };
 
     template <typename Numeric>
-    void SetToExtreme (wobbly::Point                             &p,
+    void SetToExtreme (animation::Point                          &p,
                        Numeric                                   x,
                        typename NumericTraits <Numeric>::Chooser xFinder,
                        Numeric                                   y,
                        typename NumericTraits <Numeric>::Chooser yFinder)
     {
-        wgd::set <0> (p, xFinder (wgd::get <0> (p), x));
-        wgd::set <1> (p, yFinder (wgd::get <1> (p), y));
+        agd::set <0> (p, xFinder (agd::get <0> (p), x));
+        agd::set <1> (p, yFinder (agd::get <1> (p), y));
 
         /* Round to next integer */
         PointRound (p);
@@ -1208,26 +1207,26 @@ namespace
     }
 }
 
-std::array <wobbly::Point, 4> const
+std::array <animation::Point, 4> const
 wobbly::BezierMesh::Extremes () const
 {
     double const maximum = std::numeric_limits <double>::max ();
     double const minimum = std::numeric_limits <double>::lowest ();
 
-    std::array <wobbly::Point, 4> extremes =
+    std::array <animation::Point, 4> extremes =
     {
         {
-            wobbly::Point (maximum, maximum),
-            wobbly::Point (minimum, maximum),
-            wobbly::Point (maximum, minimum),
-            wobbly::Point (minimum, minimum)
+            animation::Point (maximum, maximum),
+            animation::Point (minimum, maximum),
+            animation::Point (maximum, minimum),
+            animation::Point (minimum, minimum)
         }
     };
 
-    wobbly::Point &topLeft (extremes[0]);
-    wobbly::Point &topRight (extremes[1]);
-    wobbly::Point &bottomLeft (extremes[2]);
-    wobbly::Point &bottomRight (extremes[3]);
+    animation::Point &topLeft (extremes[0]);
+    animation::Point &topRight (extremes[1]);
+    animation::Point &bottomLeft (extremes[2]);
+    animation::Point &bottomRight (extremes[3]);
 
     auto min = [](double lhs, double rhs) -> double {
         double result =  std::min (lhs, rhs);
@@ -1253,10 +1252,9 @@ wobbly::BezierMesh::Extremes () const
     return extremes;
 }
 
-wobbly::PointView <double>
+animation::PointView <double>
 wobbly::BezierMesh::PointForIndex (size_t x, size_t y)
 {
-    return wobbly::PointView <double> (mPoints,
-                                       CoordIndex (x, y,
-                                                   config::Width));
+    return animation::PointView <double> (mPoints,
+                                          CoordIndex (x, y, config::Width));
 }

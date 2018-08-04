@@ -24,7 +24,7 @@
 
 #include <cmath>
 
-namespace wobbly
+namespace animation
 {
     namespace geometry
     {
