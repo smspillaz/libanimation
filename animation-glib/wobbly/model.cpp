@@ -60,7 +60,7 @@ enum {
 
 static GParamSpec *animation_wobbly_model_props [NPROPS] = { NULL, };
 
-namespace wgd = wobbly::geometry::dimension;
+namespace agd = animation::geometry::dimension;
 
 /**
  * animation_wobbly_model_grab_anchor:
@@ -85,8 +85,8 @@ animation_wobbly_model_grab_anchor (AnimationWobblyModel *model,
 {
   AnimationWobblyModelPrivate *priv =
     reinterpret_cast <AnimationWobblyModelPrivate *> (animation_wobbly_model_get_instance_private (model));
-  wobbly::Anchor anchor (priv->model->GrabAnchor (wobbly::Point (position.x,
-                                                                 position.y)));
+  wobbly::Anchor anchor (priv->model->GrabAnchor (animation::Point (position.x,
+                                                                    position.y)));
 
   return animation_wobbly_anchor_new_for_native_anchor_rvalue (std::move (anchor));
 }
@@ -115,8 +115,8 @@ animation_wobbly_model_insert_anchor (AnimationWobblyModel *model,
 {
   AnimationWobblyModelPrivate *priv =
     reinterpret_cast <AnimationWobblyModelPrivate *> (animation_wobbly_model_get_instance_private (model));
-  wobbly::Anchor anchor (priv->model->InsertAnchor (wobbly::Point (position.x,
-                                                                   position.y)));
+  wobbly::Anchor anchor (priv->model->InsertAnchor (animation::Point (position.x,
+                                                                      position.y)));
 
   return animation_wobbly_anchor_new_for_native_anchor_rvalue (std::move (anchor));
 }
@@ -163,10 +163,10 @@ animation_wobbly_model_deform_texcoords (AnimationWobblyModel *model,
 
   g_return_if_fail (deformed != NULL);
 
-  wobbly::Point deformed_point (priv->model->DeformTexcoords (wobbly::Point (uv.x, uv.y)));
+  animation::Point deformed_point (priv->model->DeformTexcoords (animation::Point (uv.x, uv.y)));
   *deformed = {
-    wobbly::geometry::dimension::get <0> (deformed_point),
-    wobbly::geometry::dimension::get <1> (deformed_point)
+    animation::geometry::dimension::get <0> (deformed_point),
+    animation::geometry::dimension::get <1> (deformed_point)
   };
 }
 
@@ -192,19 +192,19 @@ animation_wobbly_model_query_extremes (AnimationWobblyModel *model,
   AnimationWobblyModelPrivate *priv =
     reinterpret_cast <AnimationWobblyModelPrivate *> (animation_wobbly_model_get_instance_private (model));
 
-  std::array <wobbly::Point, 4> extremes (priv->model->Extremes ());
+  std::array <animation::Point, 4> extremes (priv->model->Extremes ());
 
   if (top_left != nullptr)
-    *top_left = { wgd::get <0> (extremes[0]), wgd::get <1> (extremes[0]) };
+    *top_left = { agd::get <0> (extremes[0]), agd::get <1> (extremes[0]) };
 
   if (top_right != nullptr)
-    *top_right = { wgd::get <0> (extremes[1]), wgd::get <1> (extremes[1]) };
+    *top_right = { agd::get <0> (extremes[1]), agd::get <1> (extremes[1]) };
 
   if (bottom_left != nullptr)
-    *bottom_left = { wgd::get <0> (extremes[2]), wgd::get <1> (extremes[2]) };
+    *bottom_left = { agd::get <0> (extremes[2]), agd::get <1> (extremes[2]) };
 
   if (bottom_right != nullptr)
-    *bottom_right = { wgd::get <0> (extremes[3]), wgd::get <1> (extremes[3]) };
+    *bottom_right = { agd::get <0> (extremes[3]), agd::get <1> (extremes[3]) };
 }
 
 /**
@@ -225,7 +225,7 @@ animation_wobbly_model_move_to (AnimationWobblyModel *model,
   priv->prop_position = position;
 
   if (priv->model != nullptr)
-    priv->model->MoveModelTo (wobbly::Point (position.x, position.y));
+    priv->model->MoveModelTo (animation::Point (position.x, position.y));
 }
 
 /**
@@ -246,7 +246,7 @@ animation_wobbly_model_move_by (AnimationWobblyModel *model,
   priv->prop_position.y += delta.y;
 
   if (priv->model != nullptr)
-    priv->model->MoveModelBy (wobbly::Point (delta.x, delta.y));
+    priv->model->MoveModelBy (animation::Point (delta.x, delta.y));
 }
 
 /**
@@ -375,8 +375,8 @@ animation_wobbly_model_constructed (GObject *object)
   AnimationWobblyModelPrivate *priv =
     reinterpret_cast <AnimationWobblyModelPrivate *> (animation_wobbly_model_get_instance_private (model));
 
-  priv->model = new wobbly::Model (wobbly::Point (priv->prop_position.x,
-                                                  priv->prop_position.y),
+  priv->model = new wobbly::Model (animation::Point (priv->prop_position.x,
+                                                     priv->prop_position.y),
                                    priv->prop_size.x,
                                    priv->prop_size.y,
                                    priv->settings);

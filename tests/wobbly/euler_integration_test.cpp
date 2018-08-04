@@ -48,7 +48,7 @@ using ::wobbly::models::Parabolic;
 
 namespace
 {
-    namespace wgd = wobbly::geometry::dimension;
+    namespace agd = animation::geometry::dimension;
 
     class SingleObjectStorage
     {
@@ -59,19 +59,19 @@ namespace
                 storage.fill (0);
             }
 
-            wobbly::PointView <double> Position ()
+            animation::PointView <double> Position ()
             {
-                return wobbly::PointView <double> (storage, 0);
+                return animation::PointView <double> (storage, 0);
             }
 
-            wobbly::PointView <double> Velocity ()
+            animation::PointView <double> Velocity ()
             {
-                return wobbly::PointView <double> (storage, 1);
+                return animation::PointView <double> (storage, 1);
             }
 
-            wobbly::PointView <double> Force ()
+            animation::PointView <double> Force ()
             {
-                return wobbly::PointView <double> (storage, 2);
+                return animation::PointView <double> (storage, 2);
             }
 
         private:
@@ -90,9 +90,9 @@ namespace
             {
             }
 
-            wobbly::PointView <double> position;
-            wobbly::PointView <double> velocity;
-            wobbly::PointView <double> force;
+            animation::PointView <double> position;
+            animation::PointView <double> velocity;
+            animation::PointView <double> force;
     };
 
     class EulerIntegration :
@@ -105,7 +105,7 @@ namespace
             {
             }
 
-            typedef wobbly::PointView <double const> DCPV;
+            typedef animation::PointView <double const> DCPV;
 
             SingleObjectStorage storage;
             SingleObjectStorageView view;
@@ -113,7 +113,7 @@ namespace
 
     TEST_F (EulerIntegration, ContinueStepWhenObjectsHaveVelocity)
     {
-        wgd::set <0> (view.velocity, 1.0);
+        agd::set <0> (view.velocity, 1.0);
 
         /* Integrate without any friction */
         EXPECT_TRUE (wobbly::EulerIntegrate (1,
@@ -126,7 +126,7 @@ namespace
 
     TEST_F (EulerIntegration, NoFurtherStepWhenObjectsHaveNoVelocity)
     {
-        wgd::set <0> (view.velocity, 0.0);
+        agd::set <0> (view.velocity, 0.0);
 
         /* Integrate without any friction */
         EXPECT_FALSE (wobbly::EulerIntegrate (1,
@@ -141,8 +141,8 @@ namespace
     {
         std::function <double (int)> horizontalVelocityFunction =
             [this](int timestep) -> double {
-                wgd::assign (view.position, wobbly::Point (1, 1));
-                wgd::assign (view.velocity, wobbly::Point (1, 0));
+                agd::assign (view.position, animation::Point (1, 1));
+                agd::assign (view.velocity, animation::Point (1, 0));
 
                 wobbly::EulerIntegrate (timestep,
                                         1,
@@ -151,7 +151,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return wgd::get <0> (view.velocity);
+                return agd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (horizontalVelocityFunction,
@@ -163,8 +163,8 @@ namespace
         std::function <double (int)> frictionlessHorizontalVelocityFunction =
             [this](int timestep) -> double {
                 /* Reset velocity and force */
-                wgd::assign (view.velocity, wobbly::Vector (0, 0));
-                wgd::assign (view.force, wobbly::Vector (1.0f, 0));
+                agd::assign (view.velocity, animation::Vector (0, 0));
+                agd::assign (view.force, animation::Vector (1.0f, 0));
 
                 wobbly::EulerIntegrate (timestep,
                                         0,
@@ -173,7 +173,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return wgd::get <0> (view.velocity);
+                return agd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (frictionlessHorizontalVelocityFunction,
@@ -188,9 +188,9 @@ namespace
         std::function <double (int)> frictionToVelocityFunction =
             [this, range](int frictionAmount) -> double {
                 /* Reset velocity and force */
-                wgd::assign (view.position, wobbly::Point (0, 0));
-                wgd::assign (view.velocity, wobbly::Vector (0, 0));
-                wgd::assign (view.force, wobbly::Vector (1.0f, 0));
+                agd::assign (view.position, animation::Point (0, 0));
+                agd::assign (view.velocity, animation::Vector (0, 0));
+                agd::assign (view.force, animation::Vector (1.0f, 0));
 
                 double frictionProportion =
                     frictionAmount / static_cast <double> (range);
@@ -206,7 +206,7 @@ namespace
                                         std::move (view.velocity),
                                         DCPV (view.force));
 
-                return wgd::get <0> (view.velocity);
+                return agd::get <0> (view.velocity);
             };
 
         EXPECT_THAT (frictionToVelocityFunction,
