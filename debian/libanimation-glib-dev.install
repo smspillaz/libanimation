@@ -1,0 +1,4 @@
+usr/include/animation-glib/*
+usr/lib/*/libanimation.so
+usr/lib/*/pkgconfig/libanimation-glib-0.pc
+usr/share/gir-1.0/Animation-0.gir
