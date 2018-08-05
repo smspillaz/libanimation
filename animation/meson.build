@@ -27,6 +27,7 @@ animation_headers_subdir = 'animation'
 subdir('stepper')
 subdir('transform')
 subdir('wobbly')
+subdir('zoom')
 
 animation_toplevel_headers = files([
   'box_calculation.h',
