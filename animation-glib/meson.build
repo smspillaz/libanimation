@@ -20,8 +20,14 @@
 
 api_version = '0'
 
-animation_glib_toplevel_headers = ['vector.h']
-animation_glib_toplevel_introspectable_sources = ['vector.cpp']
+animation_glib_toplevel_headers = [
+  'box.h',
+  'vector.h'
+]
+animation_glib_toplevel_introspectable_sources = [
+  'box.cpp',
+  'vector.cpp'
+]
 
 animation_glib_introspectable_sources = []
 animation_glib_private_sources = []
