@@ -28,7 +28,8 @@ animation_test_sources = [
   'wobbly/mesh_interpolation_test.cpp',
   'wobbly/model_test.cpp',
   'wobbly/point_test.cpp',
-  'wobbly/spring_test.cpp'
+  'wobbly/spring_test.cpp',
+  'zoom/zoom_animation_test.cpp'
 ]
 
 glib = dependency('glib-2.0')

@@ -1,4 +1,6 @@
-# /animation/meson.build
+# /animation/zoom/meson.build
+#
+# Toplevel meson build file for libanimation.
 #
 # Copyright (C) 2017, 2018 Endless Mobile, Inc.
 #
@@ -16,36 +18,17 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
-# Build the libanimation library.
+# Build the libanimation library (zoom animation component).
 
-api_version = '0'
+zoom_sources = [
+  'zoom.cpp'
+]
 
-animation_sources = []
-animation_headers = []
-animation_headers_subdir = 'animation'
+zoom_headers = [
+  'zoom.h'
+]
 
-subdir('wobbly')
-subdir('zoom')
+animation_sources += files(zoom_sources)
+animation_headers += files(zoom_headers)
 
-animation_lib = shared_library(
-  'animation',
-  animation_sources,
-  soversion: api_version,
-  install: true,
-  include_directories: [ animation_inc, glm_inc ]
-)
-
-animation_dep = declare_dependency(
-  link_with: animation_lib,
-  include_directories: [ animation_inc ],
-)
-
-pkg = import('pkgconfig')
-pkg.generate(
-  description: 'Library to provide 2D surface animations',
-  name: 'libanimation',
-  filebase: 'libanimation-' + api_version,
-  version: meson.project_version(),
-  libraries: animation_lib,
-  install_dir: join_paths(get_option('libdir'), 'pkgconfig')
-)
+install_headers(zoom_headers, subdir: join_paths(animation_headers_subdir, 'wobbly'))
