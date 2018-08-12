@@ -36,6 +36,7 @@ if not gtest_dep.found() or not gtest_main_dep.found() or not gmock_dep.found()
 endif
 
 animation_inc = include_directories('.')
+tests_inc = include_directories('tests')
 
 subdir('animation')
 subdir('animation-glib')

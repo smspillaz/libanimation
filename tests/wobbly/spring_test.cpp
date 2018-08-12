@@ -36,7 +36,7 @@
 #include <animation/wobbly/wobbly_internal.h>            // for Spring, etc
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
-#include "ostream_point_operator.h"     // for operator<<
+#include <ostream_point_operator.h>     // for operator<<
 
 using ::testing::ExitedWithCode;
 using ::testing::Not;

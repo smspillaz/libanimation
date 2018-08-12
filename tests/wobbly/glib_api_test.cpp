@@ -29,6 +29,7 @@
 #include <animation-glib/wobbly/model.h>
 
 #include <mathematical_model_matcher.h>  // for Eq, EqDispatchHelper, etc
+#include <ostream_point_operator.h>      // for operator<<, etc
 #include <within_geometry_matcher.h>     // for WithinGeometry, etc
 
 #include <gmock/gmock-cardinalities.h>  // for AtLeast
@@ -36,8 +37,6 @@
 #include <gmock/gmock-matchers.h>       // for AnythingMatcher, etc
 #include <gmock/gmock-spec-builders.h>  // for EXPECT_CALL, etc
 #include <gtest/gtest.h>                // for TEST_F, Test, Types, etc
-
-#include "ostream_point_operator.h"      // for operator<<, etc
 
 using ::testing::ElementsAreArray;
 using ::testing::Eq;

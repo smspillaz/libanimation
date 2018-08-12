@@ -36,7 +36,7 @@
 #include <animation/wobbly/wobbly_internal.h>            // for TargetMesh, etc
 
 #include <mathematical_model_matcher.h>  // for EqDispatchHelper, Eq, etc
-#include "ostream_point_operator.h"     // for operator<<
+#include <ostream_point_operator.h>     // for operator<<
 
 using ::testing::ElementsAreArray;
 using ::testing::Matcher;
