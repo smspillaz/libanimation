@@ -25,6 +25,7 @@ animation_headers = []
 animation_headers_subdir = 'animation'
 
 subdir('bounce')
+subdir('glide')
 subdir('wobbly')
 subdir('zoom')
 
