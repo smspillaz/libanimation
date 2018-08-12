@@ -20,8 +20,7 @@
  * Provides geometric types and trait overloads
  * for 2D points and boxes.
  */
-#ifndef WOBBLY_GEOMETRY_H
-#define WOBBLY_GEOMETRY_H
+#pragma once
 
 #include <animation/geometry_traits.h>
 
@@ -374,5 +373,3 @@ namespace animation
     template <typename PointType>
     using Box = animation::geometry::Box <PointType>;
 }
-
-#endif

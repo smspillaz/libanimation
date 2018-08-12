@@ -22,8 +22,7 @@
  * Implicitly depends on:
  *  - std::array
  */
-#ifndef WOBBLY_H
-#define WOBBLY_H
+#pragma once
 
 #include <cstddef>
 
@@ -187,4 +186,3 @@ namespace wobbly
             std::unique_ptr <Private> priv;
     };
 }
-#endif

@@ -29,8 +29,7 @@
  *  - std::function
  *  - std::vector
  */
-#ifndef WOBBLY_MATHEMATICAL_MODEL_MATCHER_H
-#define WOBBLY_MATHEMATICAL_MODEL_MATCHER_H
+#pragma once
 
 #include <cassert>                     // for assert
 #include <cmath>                        // for log, pow, M_E
@@ -811,6 +810,3 @@ namespace animation
         }
     }
 }
-
-
-#endif
