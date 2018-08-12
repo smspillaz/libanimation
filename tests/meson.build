@@ -19,6 +19,7 @@
 # Build the libanimation unit tests.
 
 animation_test_sources = [
+  'bounce/bounce_animation_test.cpp',
   'glm_ostream_operators.h',
   'ostream_point_operator.h',
   'wobbly/anchor_test.cpp',
