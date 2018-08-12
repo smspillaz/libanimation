@@ -24,6 +24,7 @@ animation_sources = []
 animation_headers = []
 animation_headers_subdir = 'animation'
 
+subdir('bounce')
 subdir('wobbly')
 subdir('zoom')
 

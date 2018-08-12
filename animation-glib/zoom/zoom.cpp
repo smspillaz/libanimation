@@ -15,14 +15,7 @@
  * License along with eos-companion-app-service.  If not, see
  * <http://www.gnu.org/licenses/>.
  *
- * GObject Interface for "wobbly" textures, Anchor type.
- *
- * An anchor is an object type privately holding an
- * anchor. The owner can release the anchor, which happens
- * implicitly when its ref-count drops to zero or when
- * the release() method is called.
- *
- * GObject base class for affine transform based animations.
+ * GObject interface for a zoom animation.
  */
 
 #include <animation/zoom/zoom.h>
@@ -145,19 +138,22 @@ animation_zoom_animation_class_init (AnimationZoomAnimationClass *klass)
     g_param_spec_pointer ("from",
                           "From Box",
                           "Box that we are animating from",
-                          static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT));
+                          static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
   animation_zoom_animation_props[PROP_TO] =
     g_param_spec_pointer ("to",
                           "To Box",
                           "Box that we are animating to",
-                          static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT));
+                          static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
   animation_zoom_animation_props[PROP_LENGTH] =
-    g_param_spec_pointer ("length",
-                          "Length",
-                          "How long the animation lasts",
-                          static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT));
+    g_param_spec_uint ("length",
+                       "Length",
+                       "How long the animation lasts",
+                       1,
+                       5000,
+                       300,
+                       static_cast <GParamFlags> (G_PARAM_WRITABLE | G_PARAM_CONSTRUCT_ONLY));
 
   g_object_class_install_properties (object_class,
                                      NPROPS,

@@ -41,6 +41,7 @@ animation_glib_headers = []
 animation_glib_private_headers = []
 animation_glib_headers_subdir = 'animation-glib'
 
+subdir('bounce')
 subdir('transform')
 subdir('wobbly')
 subdir('zoom')
