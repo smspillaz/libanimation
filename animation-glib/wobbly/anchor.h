@@ -24,8 +24,7 @@
  * implicitly when its ref-count drops to zero or when
  * the release() method is called.
  */
-#ifndef WOBBLY_GLIB_ANCHOR_H
-#define WOBBLY_GLIB_ANCHOR_H
+#pragma once
 
 #include <glib-object.h>
 
@@ -42,5 +41,3 @@ void animation_wobbly_anchor_move_by (AnimationWobblyAnchor *anchor,
 void animation_wobbly_anchor_release (AnimationWobblyAnchor *anchor);
 
 G_END_DECLS
-
-#endif

@@ -19,8 +19,7 @@
  *
  * GObject Interface for "wobbly" textures, 2D vector type.
  */
-#ifndef WOBBLY_GLIB_VECTOR_H
-#define WOBBLY_GLIB_VECTOR_H
+#pragma once
 
 #include <glib-object.h>
 
@@ -36,5 +35,3 @@ typedef struct {
 GType animation_vector_get_type (void);
 
 G_END_DECLS
-
-#endif

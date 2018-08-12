@@ -22,8 +22,7 @@
  * Implicitly depends on:
  *  - boost::concept
  */
-#ifndef WOBBLY_CONCEPT_ASSERT_H
-#define WOBBLY_CONCEPT_ASSERT_H
+#pragma once
 
 /* Work around compiler warnings when using BOOST_CONCEPT_ASSERT - reimplement
  * BOOST_CONCEPT_ASSERT ourselves and add __attribute__ (unused) to specify
@@ -36,5 +35,3 @@
 
 #define WOBBLY_CONCEPT_ASSERT(ModelInParens) \
     WOBBLY_CONCEPT_ASSERT_FN(void(*)ModelInParens)
-
-#endif

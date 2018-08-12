@@ -25,8 +25,7 @@
  *  - std::function
  *  - std::array
  */
-#ifndef WOBBLY_INTERNAL_H
-#define WOBBLY_INTERNAL_H
+#pragma once
 
 #include <algorithm>                    // for remove_if, find_if, etc
 #include <array>                        // for array
@@ -1333,5 +1332,3 @@ wobbly::BezierMesh::DeformUnitCoordsToMeshSpace (Point const &normalized) const
     Point absolutePosition (x, y);
     return absolutePosition;
 }
-
-#endif
