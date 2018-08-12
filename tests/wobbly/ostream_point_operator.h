@@ -20,8 +20,7 @@
  * A simple helper to output the contents of animation::Point and
  * animation::PointView when tests fail.
  */
-#ifndef WOBBLY_TESTS_OSTREAM_POINT_OPERATOR_H
-#define WOBBLY_TESTS_OSTREAM_POINT_OPERATOR_H
+#pragma once
 
 #include <animation/geometry.h>    // for Point
 #include <iomanip>                      // for operator<<, setprecision
@@ -57,4 +56,3 @@ namespace animation
         }
     }
 }
-#endif

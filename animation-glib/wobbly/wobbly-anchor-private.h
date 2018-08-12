@@ -25,11 +25,8 @@
  * the release() method is called.
  */
 
+#pragma once
+
 #include <animation/wobbly/wobbly.h>
 
-#ifndef WOBBLY_GLIB_ANCHOR_PRIVATE_H
-#define WOBBLY_GLIB_ANCHOR_PRIVATE_H
-
 AnimationWobblyAnchor * animation_wobbly_anchor_new_for_native_anchor_rvalue (wobbly::Anchor &&anchor);
-
-#endif

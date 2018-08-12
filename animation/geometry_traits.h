@@ -19,8 +19,7 @@
  *
  * Provides geometric trait mutation functions
  */
-#ifndef WOBBLY_GEOMETRY_TRAITS_H
-#define WOBBLY_GEOMETRY_TRAITS_H
+#pragma once
 
 #include <cmath>
 
@@ -380,5 +379,3 @@ namespace animation
 
     }
 }
-
-#endif

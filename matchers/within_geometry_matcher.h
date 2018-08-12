@@ -21,9 +21,7 @@
  * Dimension trait to ensure they are within
  * a PointBox.
  */
-
-#ifndef WOBBLY_WITHIN_GEOMETRY_MATCHER_H
-#define WOBBLY_WITHIN_GEOMETRY_MATCHER_H
+#pragma once
 
 #include <iomanip>                      // for operator<<, setprecision
 #include <ostream>                      // for ostream, operator<<, etc
@@ -90,5 +88,3 @@ namespace animation
         }
     }
 }
-
-#endif

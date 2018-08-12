@@ -19,8 +19,7 @@
  *
  * GObject Interface for "wobbly" textures.
  */
-#ifndef WOBBLY_GLIB_MODEL_H
-#define WOBBLY_GLIB_MODEL_H
+#pragma once
 
 #include <glib-object.h>
 
@@ -72,5 +71,3 @@ void animation_wobbly_model_set_friction (AnimationWobblyModel *model, double fr
 void animation_wobbly_model_set_maximum_range (AnimationWobblyModel *model, double range);
 
 G_END_DECLS
-
-#endif
