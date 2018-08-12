@@ -19,13 +19,13 @@
 # Build the libanimation unit tests.
 
 animation_test_sources = [
+  'ostream_point_operator.h',
   'wobbly/anchor_test.cpp',
   'wobbly/constrainment_test.cpp',
   'wobbly/euler_integration_test.cpp',
   'wobbly/glib_api_test.cpp',
   'wobbly/mesh_interpolation_test.cpp',
   'wobbly/model_test.cpp',
-  'wobbly/ostream_point_operator.h',
   'wobbly/point_test.cpp',
   'wobbly/spring_test.cpp'
 ]
@@ -46,7 +46,8 @@ animation_test_executable = executable(
     within_geometry_matcher_dep,
     animation_dep,
     animation_glib_dep
-  ]
+  ],
+  include_directories: [ tests_inc ]
 )
 
 test('animation_test', animation_test_executable)
