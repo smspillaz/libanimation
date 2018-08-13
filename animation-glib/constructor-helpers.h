@@ -24,6 +24,8 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <type_traits>
+
 G_BEGIN_DECLS
 
 inline GValue *
@@ -52,3 +54,23 @@ append_interface_prop_to_construct_params (GObjectConstructParam *construct_para
                                            unsigned int          *out_extended_n_construct_params);
 
 G_END_DECLS
+
+#ifdef __cplusplus
+template <typename Marshaller>
+typename std::result_of <Marshaller(GValue *)>::type ForwardFromValueHT (GHashTable  *ht,
+                                                                         Marshaller &&m,
+                                                                         const char  *name)
+{
+  return m (lookup_gvalue (ht, name));
+}
+
+template <class Interface>
+struct InterfaceConstructor
+{
+    template <typename... ArgTypes>
+    static Interface * construct (ArgTypes&&... args)
+    {
+        return new Interface (args...);
+    }
+};
+#endif
