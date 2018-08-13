@@ -24,7 +24,12 @@
 #include <glib.h>
 #include <glib-object.h>
 
+#include <array>
 #include <type_traits>
+#include <utility>
+
+#include <animation/geometry.h>
+#include <animation-glib/box.h>
 
 G_BEGIN_DECLS
 
@@ -56,6 +61,17 @@ append_interface_prop_to_construct_params (GObjectConstructParam *construct_para
 G_END_DECLS
 
 #ifdef __cplusplus
+inline animation::Box <animation::Point>
+animation_box_from_gvalue (GValue *value)
+{
+  AnimationBox target_box =
+    *(reinterpret_cast <AnimationBox *> (g_value_get_boxed (value)));
+  return animation::Box <animation::Point> (animation::Point (target_box.top_left.x,
+                                                              target_box.top_left.y),
+                                            animation::Point (target_box.bottom_right.x,
+                                                              target_box.bottom_right.y));
+}
+
 template <typename Marshaller>
 typename std::result_of <Marshaller(GValue *)>::type ForwardFromValueHT (GHashTable  *ht,
                                                                          Marshaller &&m,
