@@ -29,6 +29,7 @@ subdir('transform')
 subdir('wobbly')
 
 animation_toplevel_headers = files([
+  'box_calculation.h',
   'geometry.h',
   'geometry_traits.h',
   'transform_calculation.h'
