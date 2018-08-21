@@ -264,7 +264,7 @@ namespace animation
         namespace dimension
         {
             template <typename T>
-            struct Dimension <PointModel<T> >
+            struct Dimension <PointModel <T> >
             {
                 typedef T data_type;
                 static const size_t dimensions = 2;
