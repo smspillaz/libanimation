@@ -20,24 +20,25 @@
 
 api_version = '0'
 
-animation_glib_toplevel_headers = [
+animation_glib_toplevel_headers = files([
   'box.h',
   'vector.h'
-]
-animation_glib_toplevel_introspectable_sources = [
+])
+animation_glib_toplevel_introspectable_sources = files([
   'box.cpp',
   'vector.cpp'
-]
+])
 
-animation_glib_introspectable_sources = []
-animation_glib_private_sources = []
-animation_glib_headers = []
+animation_glib_introspectable_sources = files([])
+animation_glib_private_sources = files([])
+animation_glib_headers = files([])
 animation_glib_headers_subdir = 'animation-glib'
 
+subdir('stepper')
 subdir('wobbly')
 
-animation_glib_introspectable_sources += files(animation_glib_toplevel_introspectable_sources)
-animation_glib_headers += files(animation_glib_toplevel_headers)
+animation_glib_introspectable_sources += animation_glib_toplevel_introspectable_sources
+animation_glib_headers += animation_glib_toplevel_headers
 
 install_headers(animation_glib_toplevel_headers, subdir: animation_glib_headers_subdir)
 

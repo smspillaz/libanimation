@@ -24,6 +24,7 @@ animation_sources = []
 animation_headers = []
 animation_headers_subdir = 'animation'
 
+subdir('stepper')
 subdir('wobbly')
 
 animation_lib = shared_library(
