@@ -51,6 +51,7 @@ animation_glib_headers_subdir = 'animation-glib'
 
 subdir('bounce')
 subdir('glide')
+subdir('grid')
 subdir('stepper')
 subdir('transform')
 subdir('wobbly')
