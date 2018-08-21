@@ -445,6 +445,59 @@ namespace animation
         namespace t = ::testing;
         namespace agd = ::animation::geometry::dimension;
 
+        template <typename T>
+        struct AlmostEqTrait
+        {
+            typedef T ValueType;
+
+            template <class Comparator>
+            static bool apply (T          const &lhs,
+                               T          const &rhs,
+                               Comparator       &&comparator)
+            {
+                return comparator (lhs, rhs);
+            }
+        };
+
+        template <typename T>
+        class AlmostEqMatcher :
+            public t::MatcherInterface <T const &>
+        {
+            public:
+
+                AlmostEqMatcher (T const &value, float tolerance) :
+                    value (value),
+                    tolerance (tolerance)
+                {
+                }
+
+                bool MatchAndExplain (T const                &x,
+                                      t::MatchResultListener *listener) const
+                {
+                    using namespace std::placeholders;
+                    auto func = animation::testing::close_at_tolerance <typename AlmostEqTrait <T>::ValueType, typename AlmostEqTrait <T>::ValueType, typename AlmostEqTrait <T>::ValueType>;
+                    return AlmostEqTrait <T>::apply (x,
+                                                     value,
+                                                     std::bind (func, _1, _2, tolerance));
+                }
+
+                void DescribeTo (std::ostream *os) const
+                {
+                    *os << "almost equal to " << value << " (at tolerance " << tolerance << ")";
+                }
+
+            private:
+
+                T     value;
+                float tolerance;
+        };
+
+        template <typename T>
+        t::Matcher <const T &> AlmostEq (T const &value, float tolerance)
+        {
+            return t::MakeMatcher (new AlmostEqMatcher <T> (value, tolerance));
+        }
+
         template <typename GeometryType, typename Compare>
         class GeometricallyEqualMatcher :
             public t::MatcherInterface <GeometryType const &>
