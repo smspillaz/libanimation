@@ -26,7 +26,17 @@ animation_glib_toplevel_headers = files([
 ])
 animation_glib_toplevel_introspectable_sources = files([
   'box.cpp',
-  'vector.cpp'
+  'vector.cpp',
+  'vector.h',
+  'vector4d.h'
+])
+animation_glib_toplevel_private_headers = files([
+  'vector4d-internal.h'
+])
+animation_glib_toplevel_introspectable_sources = files([
+  'box.cpp',
+  'vector.cpp',
+  'vector4d.cpp'
 ])
 
 animation_glib_introspectable_sources = files([])

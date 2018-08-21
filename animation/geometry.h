@@ -367,12 +367,143 @@ namespace animation
                     dimension::get <1> (p) >= y1 &&
                     dimension::get <1> (p) <= y2);
         }
+
+        /**
+         * Vector4DModel<T>:
+         *
+         * A detached 2D point or vector in space for a given data
+         * type T. This is a structure of two values.
+         *
+         * PointModel implements the Dimension trait, meaning that it
+         * can be used with functions in the animation::geometry::dimension
+         * namespace.
+         */
+        template <typename T>
+        struct Vector4DModel
+        {
+            Vector4DModel (T x, T y, T z, T w) noexcept :
+                x (x),
+                y (y),
+                z (z),
+                w (w)
+            {
+            }
+
+            Vector4DModel () noexcept :
+                x (0),
+                y (0),
+                z (0),
+                w (0)
+            {
+            }
+
+            Vector4DModel (Vector4DModel const &v) noexcept :
+                x (v.x),
+                y (v.y),
+                z (v.z),
+                w (v.w)
+            {
+            }
+
+            void swap (Vector4DModel &a, Vector4DModel &b) noexcept
+            {
+                std::swap (a.x, b.x);
+                std::swap (a.y, b.y);
+                std::swap (a.z, b.w);
+                std::swap (a.w, b.z);
+            }
+
+            Vector4DModel & operator= (Vector4DModel other) noexcept
+            {
+                swap (*this, other);
+
+                return *this;
+            }
+
+            T x;
+            T y;
+            T z;
+            T w;
+        };
+
+        typedef Vector4DModel <double> Vector4D;
+
+        namespace dimension
+        {
+            template <typename T>
+            struct Dimension <Vector4DModel <T> >
+            {
+                typedef T data_type;
+                static const size_t dimensions = 4;
+            };
+
+            template <typename T>
+            struct DimensionAccess <Vector4DModel <T>, 0>
+            {
+                static inline T get (Vector4DModel <T> const &p)
+                {
+                    return p.x;
+                }
+
+                static inline void
+                set (Vector4DModel <T> &p, T const &value)
+                {
+                    p.x = value;
+                }
+            };
+
+            template <typename T>
+            struct DimensionAccess <Vector4DModel <T>, 1>
+            {
+                static inline T get (Vector4DModel <T> const &p)
+                {
+                    return p.y;
+                }
+
+                static inline void
+                set (Vector4DModel <T> &p, T const &value)
+                {
+                    p.y = value;
+                }
+            };
+
+            template <typename T>
+            struct DimensionAccess <Vector4DModel <T>, 2>
+            {
+                static inline T get (Vector4DModel <T> const &p)
+                {
+                    return p.z;
+                }
+
+                static inline void
+                set (Vector4DModel <T> &p, T const &value)
+                {
+                    p.z = value;
+                }
+            };
+
+            template <typename T>
+            struct DimensionAccess <Vector4DModel <T>, 3>
+            {
+                static inline T get (Vector4DModel <T> const &p)
+                {
+                    return p.w;
+                }
+
+                static inline void
+                set (Vector4DModel <T> &p, T const &value)
+                {
+                    p.w = value;
+                }
+            };
+        }
     }
 
     /* Import animation::geometry::Point types into
      * animation namespace for compatibility. */
     typedef animation::geometry::Point Point;
     typedef animation::geometry::Vector Vector;
+    typedef animation::geometry::Vector4D Vector4D;
 
     template <typename NumericType>
     using PointView = animation::geometry::PointView <NumericType>;
