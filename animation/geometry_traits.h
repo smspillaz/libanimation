@@ -377,5 +377,10 @@ namespace animation
             }
         }
 
+        template <typename T, typename U>
+        inline bool operator== (T const &l, U const &r)
+        {
+            return dimension::equals (l, r);
+        }
     }
 }
