@@ -23,6 +23,7 @@ animation_test_sources = [
   'glide/glide_animation_test.cpp',
   'glm_ostream_operators.h',
   'ostream_point_operator.h',
+  'magiclamp/magiclamp_animation_test.cpp',
   'wobbly/anchor_test.cpp',
   'wobbly/constrainment_test.cpp',
   'wobbly/euler_integration_test.cpp',

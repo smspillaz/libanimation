@@ -27,6 +27,7 @@ animation_headers_subdir = 'animation'
 subdir('bounce')
 subdir('glide')
 subdir('grid')
+subdir('magiclamp')
 subdir('stepper')
 subdir('transform')
 subdir('wobbly')
