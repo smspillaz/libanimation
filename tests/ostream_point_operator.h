@@ -54,5 +54,21 @@ namespace animation
             agd::assign (point, p);
             return lhs << point;
         }
+
+        inline std::ostream &
+        operator<< (std::ostream &lhs, Vector4D const &p)
+        {
+            namespace agd = animation::geometry::dimension;
+
+            return lhs << std::setprecision (10)
+                       << "x: "
+                       << agd::get <0> (p)
+                       << " y: "
+                       << agd::get <1> (p)
+                       << " z: "
+                       << agd::get <2> (p)
+                       << " w: "
+                       << agd::get <3> (p);
+        }
     }
 }
