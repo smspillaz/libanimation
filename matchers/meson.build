@@ -31,7 +31,7 @@ mathematical_model_matcher_lib = static_library(
   dependencies: [
     gtest_dep,
     gmock_dep,
-    wobbly_dep
+    animation_dep
   ],
   install: false
 )
@@ -52,7 +52,7 @@ within_geometry_matcher_lib = static_library(
   dependencies: [
     gtest_dep,
     gmock_dep,
-    wobbly_dep
+    animation_dep
   ],
   install: false
 )

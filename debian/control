@@ -1,4 +1,4 @@
-Source: libwobbly
+Source: libanimation
 Priority: extra
 Maintainer: Sam Spilsbury <sam@endlessm.com>
 Build-Depends: debhelper (>= 8.0.0),
@@ -13,47 +13,50 @@ Build-Depends: debhelper (>= 8.0.0),
                meson
 Standards-Version: 3.9.4
 Section: libs
-Vcs-Git: git://github.com/smspillaz/libwobbly.git
+Vcs-Git: git://github.com/endless/libanimation.git
 
-Package: libwobbly-dev
+Package: libanimation-dev
 Section: libdevel
 Architecture: any
-Depends: libwobbly0 (= ${binary:Version}),
-Description: Wobbly Mesh Library (C++ API) headers
- Wobbly Mesh (C++ API) headers
+Depends: libanimation0 (= ${binary:Version}),
+Description: 2D Surfaces Animations (C++ API) headers
+ 2D Surfaces Animations (C++ API) headers
+Replaces: libwobbly-dev (<= 0.3.2)
 
-Package: libwobbly0
+Package: libanimation0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
-Description: Wobbly Mesh library (C++ API)
- Wobbly Mesh
+Description: 2D Surfaces Animations library (C++ API)
+ 2D Surfaces Animations library
+Replaces: libwobbly0 (<= 0.3.2)
 
-Package: libwobbly-glib0
+Package: libanimation-glib0
 Section: libs
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         libwobbly0 (= ${binary:Version})
-Description: Wobbly Mesh library (GLib API)
- Wobbly Mesh (GLib API)
+         libanimation0 (= ${binary:Version})
+Description: 2D Surfaces Animations library (GLib API)
+ 2D Surfaces Animations library
+Replaces: libwobbly-glib0 (<= 0.3.2)
 
-Package: libwobbly-glib-dev
-Section: libdevel
-Architecture: any
-Depends: ${misc:Depends},
-         libwobbly-glib0 (= ${binary:Version}),
-         gir1.2-libwobbly-glib-0.3 (= ${binary:Version})
-Description: Wobbly Mesh library (GLib API) headers
- Wobbly Mesh library (GLib API) headers
-
-Package: gir1.2-libwobbly-glib-0.3
+Package: libanimation-glib-dev
 Section: libs
+Architecture: any
+Depends: libanimation0 (= ${binary:Version}),
+Description: 2D Surfaces Animations (GLib API) headers
+ 2D Surfaces Animations (GLib API) headers
+Replaces: libwobbly-glib-dev (<= 0.3.2)
+
+Package: gir1.2-libanimation-glib0
+Section: non-free/libs
 Architecture: any
 Depends: ${gir:Depends},
          ${misc:Depends},
          ${shlibs:Depends},
-         libwobbly-glib0 (= ${binary:Version})
-Description: Wobbly Mesh library (GObject Introspection) files
- Wobbly Mesh library (GObject Introspection) files
+         libanimation-glib0 (= ${binary:Version})
+Description: 2D Surfaces Animations library (GObject Introspection) files
+ 2D Surfaces Animations library (GObject Introspection) files
+Replaces: gir1.2-libwobbly-glib0 (<= 0.3.2)

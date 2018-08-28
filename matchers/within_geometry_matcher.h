@@ -3,12 +3,12 @@
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
- * libwobbly is free software: you can redistribute it and/or
+ * libanimation is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation, either version 2.1 of the
  * License, or (at your option) any later version.
  *
- * libwobbly is distributed in the hope that it will be useful,
+ * libanimation is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
@@ -21,23 +21,21 @@
  * Dimension trait to ensure they are within
  * a PointBox.
  */
-
-#ifndef WOBBLY_WITHIN_GEOMETRY_MATCHER_H
-#define WOBBLY_WITHIN_GEOMETRY_MATCHER_H
+#pragma once
 
 #include <iomanip>                      // for operator<<, setprecision
 #include <ostream>                      // for ostream, operator<<, etc
 
-#include <wobbly/geometry_traits.h>
+#include <animation/geometry_traits.h>
 
 #include <gmock/gmock.h>       // IWYU pragma: keep
 
-namespace wobbly
+namespace animation
 {
     namespace matchers
     {
         namespace t = ::testing;
-        namespace wgd = ::wobbly::geometry::dimension;
+        namespace agd = ::animation::geometry::dimension;
 
         template <typename ParentGeometry>
         class WithinGeometryMatcher
@@ -73,7 +71,7 @@ namespace wobbly
                 void Describe (std::ostream &os) const
                 {
                     os << " within :" << std::endl;
-                    wgd::for_each_point (parent, [&os](auto const &p) {
+                    agd::for_each_point (parent, [&os](auto const &p) {
                         os << " - " << p << std::endl;
                     });
                 }
@@ -90,5 +88,3 @@ namespace wobbly
         }
     }
 }
-
-#endif

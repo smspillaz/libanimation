@@ -1,5 +1,5 @@
 /*
- * matchers/mathematical_model_matcher.cpp
+ * animation-glib/vector.h
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
@@ -17,10 +17,21 @@
  * License along with eos-companion-app-service.  If not, see
  * <http://www.gnu.org/licenses/>.
  *
- * Provides utilities to match functions producing single floating
- * point output values for single integer input values to arbitrary
- * mathematical models, for instance, asserting that a function
- * produces values in a linear sequence, or an exponential sequence
- * with a certain (low) error tolerance.
+ * GObject Interface for "wobbly" textures, 2D vector type.
  */
-#include "mathematical_model_matcher.h"
+#pragma once
+
+#include <glib-object.h>
+
+G_BEGIN_DECLS
+
+typedef struct {
+  double x;
+  double y;
+} AnimationVector;
+
+#define ANIMATION_TYPE_VECTOR animation_vector_get_type ()
+
+GType animation_vector_get_type (void);
+
+G_END_DECLS

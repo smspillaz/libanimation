@@ -3,12 +3,12 @@
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
- * libwobbly is free software: you can redistribute it and/or
+ * libanimation is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation, either version 2.1 of the
  * License, or (at your option) any later version.
  *
- * libwobbly is distributed in the hope that it will be useful,
+ * libanimation is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
@@ -17,44 +17,42 @@
  * License along with eos-companion-app-service.  If not, see
  * <http://www.gnu.org/licenses/>.
  *
- * A simple helper to output the contents of wobbly::Point and
- * wobbly::PointView when tests fail.
+ * A simple helper to output the contents of animation::Point and
+ * animation::PointView when tests fail.
  */
-#ifndef WOBBLY_TESTS_OSTREAM_POINT_OPERATOR_H
-#define WOBBLY_TESTS_OSTREAM_POINT_OPERATOR_H
+#pragma once
 
-#include <wobbly/wobbly.h>    // for Point
+#include <animation/geometry.h>    // for Point
 #include <iomanip>                      // for operator<<, setprecision
 #include <iosfwd>                       // for ostream
 #include <ostream>                      // for basic_ostream, char_traits, etc
 
-namespace wobbly
+namespace animation
 {
     namespace geometry
     {
         inline std::ostream &
         operator<< (std::ostream &lhs, Point const &p)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
             return lhs << std::setprecision (10)
                        << "x: "
-                       << wgd::get <0> (p)
+                       << agd::get <0> (p)
                        << " y: "
-                       << wgd::get <1> (p);
+                       << agd::get <1> (p);
         }
 
         template <typename NumericType>
         inline std::ostream &
         operator<< (std::ostream                                    &lhs,
-                    wobbly::geometry::PointView <NumericType> const &p)
+                    animation::geometry::PointView <NumericType> const &p)
         {
-            namespace wgd = wobbly::geometry::dimension;
+            namespace agd = animation::geometry::dimension;
 
             Point point;
-            wgd::assign (point, p);
+            agd::assign (point, p);
             return lhs << point;
         }
     }
 }
-#endif

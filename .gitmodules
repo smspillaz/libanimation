@@ -1,3 +1,0 @@
-[submodule "wobbly/third_party/allow_move_optional"]
-	path = wobbly/third_party/allow_move_optional
-	url = git://github.com/smspillaz/CopyMoveConstrainedOptional

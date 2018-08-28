@@ -3,12 +3,12 @@
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
- * libwobbly is free software: you can redistribute it and/or
+ * libanimation is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License as
  * published by the Free Software Foundation, either version 2.1 of the
  * License, or (at your option) any later version.
  *
- * libwobbly is distributed in the hope that it will be useful,
+ * libanimation is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Lesser General Public License for more details.
@@ -29,8 +29,7 @@
  *  - std::function
  *  - std::vector
  */
-#ifndef WOBBLY_MATHEMATICAL_MODEL_MATCHER_H
-#define WOBBLY_MATHEMATICAL_MODEL_MATCHER_H
+#pragma once
 
 #include <cassert>                     // for assert
 #include <cmath>                        // for log, pow, M_E
@@ -43,11 +42,11 @@
 #include <type_traits>                  // for enable_if, is_same
 #include <vector>                       // for vector
 
-#include <wobbly/wobbly.h>
+#include <animation/geometry.h>
 
 #include <gmock/gmock.h>       // IWYU pragma: keep
 
-namespace wobbly
+namespace animation
 {
     namespace models
     {
@@ -78,7 +77,7 @@ namespace wobbly
 
                 typedef std::unique_ptr <DataModel> Unique;
 
-                typedef wobbly::PointModel <NT> Point;
+                typedef animation::PointModel <NT> Point;
                 typedef std::function <NumericType (int)> Generator;
                 typedef std::function <Unique (Generator const &,
                                                unsigned int)> Factory;
@@ -91,7 +90,7 @@ namespace wobbly
 
         namespace exponential
         {
-            namespace wgd = ::wobbly::geometry::dimension;
+            namespace agd = ::animation::geometry::dimension;
 
             /* Given a function which generates values from x = 0 -> y = c
              * two data points on that line, and the value c,
@@ -120,8 +119,8 @@ namespace wobbly
             SolveForECoeff (typename DataModel <N>::Point const &xZeroPoint,
                             N                                   constant)
             {
-                N x = wgd::get <0> (xZeroPoint);
-                N y = wgd::get <1> (xZeroPoint);
+                N x = agd::get <0> (xZeroPoint);
+                N y = agd::get <1> (xZeroPoint);
 
                 assert (x == 0.0);
 
@@ -444,7 +443,7 @@ namespace wobbly
     namespace matchers
     {
         namespace t = ::testing;
-        namespace wgd = ::wobbly::geometry::dimension;
+        namespace agd = ::animation::geometry::dimension;
 
         template <typename GeometryType, typename Compare>
         class GeometricallyEqualMatcher :
@@ -479,20 +478,20 @@ namespace wobbly
                                               RHS const &rhs)
                     {
                         const float epsilon = 10e-7;
-                        typedef typename wgd::Dimension <LHS>::data_type LT;
+                        typedef typename agd::Dimension <LHS>::data_type LT;
 
                         bool result = false;
 
                         /* If we are comparing to zero, then use
                          * check_is_small as opposed to check_is_close */
-                        if (wgd::get <D> (rhs) == 0.0)
-                            result = wobbly::testing::is_small (wgd::get <D> (lhs),
-                                                                epsilon);
+                        if (agd::get <D> (rhs) == 0.0)
+                            result = animation::testing::is_small (agd::get <D> (lhs),
+                                                                   epsilon);
                         else
                         {
-                            result = wobbly::testing::close_at_tolerance <LT> (wgd::get <D> (lhs),
-                                                                               wgd::get <D> (rhs),
-                                                                               epsilon);
+                            result = animation::testing::close_at_tolerance <LT> (agd::get <D> (lhs),
+                                                                                  agd::get <D> (rhs),
+                                                                                  epsilon);
                         }
 
                         return result &&
@@ -512,7 +511,7 @@ namespace wobbly
                 template <typename LHS, typename RHS>
                 static inline bool compare (LHS const &lhs, RHS const &rhs)
                 {
-                    typedef wgd::Dimension <LHS> DimLHS;
+                    typedef agd::Dimension <LHS> DimLHS;
                     typedef Equal <LHS, RHS, 0, DimLHS::dimensions> Comparator;
 
                     return Comparator::apply (lhs, rhs);
@@ -521,7 +520,7 @@ namespace wobbly
                 Compare geometry;
         };
 
-        /* We want to be able to pass any compatible wobbly::dimension to this
+        /* We want to be able to pass any compatible animation::dimension to this
          * matcher so it needs to be a template class with a template
          * conversion operator to Matcher <T> (eg, to signify that it is
          * T that is being matched, but Geometry that is being compared) */
@@ -579,7 +578,7 @@ namespace wobbly
             struct Geo
             {
                 static constexpr bool value =
-                    !(std::is_same <typename wgd::Dimension <T>::data_type, void>::value);
+                    !(std::is_same <typename agd::Dimension <T>::data_type, void>::value);
             };
 
             template <typename T>
@@ -710,9 +709,9 @@ namespace wobbly
                                 << std::endl;
 
                         /* Close to specified tolerance */
-                        if (!wobbly::testing::close_at_tolerance (modelPrediction,
-                                                                  actual,
-                                                                  mTolerance))
+                        if (!animation::testing::close_at_tolerance (modelPrediction,
+                                                                     actual,
+                                                                     mTolerance))
                         {
                             if (os)
                                 *os << " (exceeding tolerance: "
@@ -811,6 +810,3 @@ namespace wobbly
         }
     }
 }
-
-
-#endif

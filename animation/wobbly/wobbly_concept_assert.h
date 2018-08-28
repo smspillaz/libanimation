@@ -1,5 +1,5 @@
 /*
- * matchers/mathematical_model_matcher.cpp
+ * animation/wobbly/wobbly_concept_assert.h
  *
  * Copyright 2018 Endless Mobile, Inc.
  *
@@ -17,10 +17,21 @@
  * License along with eos-companion-app-service.  If not, see
  * <http://www.gnu.org/licenses/>.
  *
- * Provides utilities to match functions producing single floating
- * point output values for single integer input values to arbitrary
- * mathematical models, for instance, asserting that a function
- * produces values in a linear sequence, or an exponential sequence
- * with a certain (low) error tolerance.
+ * Workarounds for -Wunused-local-typedef warnings on BOOST_CONCEPT_ASSERT
+ *
+ * Implicitly depends on:
+ *  - boost::concept
  */
-#include "mathematical_model_matcher.h"
+#pragma once
+
+/* Work around compiler warnings when using BOOST_CONCEPT_ASSERT - reimplement
+ * BOOST_CONCEPT_ASSERT ourselves and add __attribute__ (unused) to specify
+ * that the typedef will be unsued */
+#define WOBBLY_CONCEPT_ASSERT_FN( ModelFnPtr ) \
+    typedef ::boost::concepts::detail::instantiate < \
+        &::boost::concepts::requirement_<ModelFnPtr>::failed> \
+    BOOST_PP_CAT(boost_concept_check,__LINE__) \
+    __attribute__((unused))
+
+#define WOBBLY_CONCEPT_ASSERT(ModelInParens) \
+    WOBBLY_CONCEPT_ASSERT_FN(void(*)ModelInParens)
