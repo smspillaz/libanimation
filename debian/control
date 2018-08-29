@@ -45,7 +45,7 @@ Replaces: libwobbly-glib0 (<= 0.3.2)
 Package: libanimation-glib-dev
 Section: libs
 Architecture: any
-Depends: libanimation0 (= ${binary:Version}),
+Depends: libanimation-glib0 (= ${binary:Version}),
 Description: 2D Surfaces Animations (GLib API) headers
  2D Surfaces Animations (GLib API) headers
 Replaces: libwobbly-glib-dev (<= 0.3.2)
