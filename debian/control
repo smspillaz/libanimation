@@ -50,7 +50,7 @@ Description: 2D Surfaces Animations (GLib API) headers
  2D Surfaces Animations (GLib API) headers
 Replaces: libwobbly-glib-dev (<= 0.3.2)
 
-Package: gir1.2-libanimation-glib0
+Package: gir1.2-animation-glib-0
 Section: non-free/libs
 Architecture: any
 Depends: ${gir:Depends},
