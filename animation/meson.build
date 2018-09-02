@@ -27,6 +27,13 @@ animation_headers_subdir = 'animation'
 subdir('stepper')
 subdir('wobbly')
 
+animation_toplevel_headers = files([
+  'geometry.h',
+  'geometry_traits.h'
+])
+
+animation_headers += animation_toplevel_headers
+
 animation_lib = shared_library(
   'animation',
   animation_sources,
@@ -49,3 +56,5 @@ pkg.generate(
   libraries: animation_lib,
   install_dir: join_paths(get_option('libdir'), 'pkgconfig')
 )
+
+install_headers(animation_toplevel_headers, subdir: animation_headers_subdir)
